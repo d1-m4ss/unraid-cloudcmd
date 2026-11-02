@@ -1,0 +1,557 @@
+<?xml version='1.0' standalone='yes'?>
+<!DOCTYPE PLUGIN [
+<!ENTITY name "cloudcmd.main">
+<!ENTITY author "d13mas">
+<!ENTITY version "2026.11.01.4">
+<!ENTITY launch "Main">
+]>
+<PLUGIN name="&name;" author="&author;" version="&version;" launch="&launch;" min="6.12.0" icon="columns">
+
+<CHANGES>
+###2026.11.01.4
+- F5/F6 inside the Main-page frame start server-side rsync jobs: progress list, cancel, resume; job state kept outside /mnt/user (flash + RAM) so the container cannot tamper with it; existing-destination confirmation.
+
+###2026.11.01.3
+- Cloud Commander port changed to 8765.
+
+###2026.11.01.2
+- Focus the iframe on load so arrow keys reach Cloud Commander without an extra click.
+
+###2026.11.01.1
+- Dark iframe background to match Cloud Commander theme.
+
+###2026.11.01
+- Initial release: collapsed Cloud Commander section on the Main tab, between pools and Boot Device.
+</CHANGES>
+
+<FILE Name="/usr/local/emhttp/plugins/&name;/CloudCommander.page" Mode="0644">
+<INLINE>
+<![CDATA[Menu="Main:2z"
+Title="Cloud Commander"
+Tag="columns"
+Markdown="false"
+---
+<?php
+$cc_port = 8765;
+$cc_csrf = $var['csrf_token'] ?? (@parse_ini_file('/var/local/emhttp/var.ini')['csrf_token'] ?? '');
+?>
+<style>
+  #cc-box { margin: 0 0 1.2em 0; }
+  #cc-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 1em; padding: .8em 1em;
+            border: 1px solid rgba(128,128,128,.45); border-radius: 4px; }
+  #cc-bar .cc-msg { flex: 1 1 22em; }
+  #cc-bar input[type=button], #cc-bar a.cc-newtab { margin: 0; }
+  #cc-frame-wrap { margin-top: .8em; }
+  #cc-frame { width: 100%; height: 72vh; min-height: 520px; border: 1px solid rgba(128,128,128,.45);
+              border-radius: 4px; background: #20242b; }
+  #cc-note { margin-top: .6em; opacity: .8; }
+  #cc-jobs { margin-top: .8em; display: none; }
+  .cc-job { display: flex; flex-wrap: wrap; align-items: center; gap: .3em 1em; padding: .45em .2em; border-top: 1px solid rgba(128,128,128,.25); }
+  .cc-job > div { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .cc-job .cc-what { flex: 1 1 14em; }
+  .cc-job .cc-paths { flex: 2 1 18em; }
+  .cc-job .cc-prog { flex: 0 0 auto; }
+  .cc-job .cc-info { flex: 0 1 12em; }
+  .cc-job .cc-state { flex: 0 0 6.5em; }
+  .cc-job .cc-acts { flex: 0 0 auto; }
+  #cc-jobs progress { width: 11em; height: .9em; vertical-align: middle; }
+  #cc-jobs .cc-dim { opacity: .75; }
+  #cc-jobs .cc-st-failed, #cc-jobs .cc-st-interrupted { color: #e68a00; }
+  #cc-jobs .cc-st-done { color: #4caf50; }
+  #cc-jobs input[type=button] { margin: 0 .3em 0 0; padding: .2em .8em; }
+  #cc-jobs-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: .3em; }
+</style>
+<div id="cc-box">
+  <div id="cc-bar">
+    <span class="cc-msg" id="cc-msg"></span>
+    <input type="button" id="cc-toggle" value="Open Cloud Commander">
+    <a class="cc-newtab" id="cc-newtab" href="#" target="_blank" rel="noopener">Open in new tab</a>
+  </div>
+  <div id="cc-jobs">
+    <div id="cc-jobs-head"><b>Copy / move jobs (run on the server, survive closing this tab)</b><input type="button" id="cc-clear" value="Clear finished"></div>
+    <div id="cc-jobs-body"></div>
+  </div>
+  <div id="cc-frame-wrap" style="display:none"></div>
+</div>
+<script>
+(function () {
+  var port = <?= (int)$cc_port ?>;
+  var token = <?= json_encode((string)$cc_csrf, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
+  var api = '/plugins/cloudcmd.main/jobs.php';
+  var url = 'http://' + location.hostname + ':' + port + '/';
+  var wrap = document.getElementById('cc-frame-wrap');
+  var btn = document.getElementById('cc-toggle');
+  var msg = document.getElementById('cc-msg');
+  var newtab = document.getElementById('cc-newtab');
+  var jobsBox = document.getElementById('cc-jobs');
+  var jobsBody = document.getElementById('cc-jobs-body');
+  var frame = null;
+  var prev = {};
+  var timer = null;
+  newtab.href = url;
+
+  var MSG_CLOSED = 'Cloud Commander is collapsed so nothing gets moved or deleted by accident. Actions there apply immediately (no recycle bin).';
+  var MSG_OPEN = 'Cloud Commander is open. F5 / F6 start server-side jobs (progress below); delete and rename apply immediately.';
+  function setMsg(icon, text) {
+    msg.textContent = '';
+    var i = document.createElement('i');
+    i.className = 'fa ' + icon;
+    msg.appendChild(i);
+    msg.appendChild(document.createTextNode('  ' + text));
+  }
+  setMsg('fa-lock', MSG_CLOSED);
+
+  function post(params) {
+    var body = new URLSearchParams(params);
+    body.set('csrf_token', token);
+    return fetch(api, {method: 'POST', credentials: 'same-origin', headers: {'X-CSRF-Token': token}, body: body})
+      .then(function (r) { return r.json(); });
+  }
+
+  function el(tag, text, cls) {
+    var e = document.createElement(tag);
+    if (text !== undefined) e.textContent = text;
+    if (cls) e.className = cls;
+    return e;
+  }
+
+  function itemsText(names) {
+    return names.length === 1 ? names[0] : names[0] + ' +' + (names.length - 1) + ' more';
+  }
+
+  function button(label, fn) {
+    var b = el('input');
+    b.type = 'button';
+    b.value = label;
+    b.addEventListener('click', fn);
+    return b;
+  }
+
+  function act(action, id) {
+    post({action: action, id: id}).then(function (r) {
+      if (!r.ok) alert(r.error || 'failed');
+      poll();
+    });
+  }
+
+  function render(jobs) {
+    jobsBody.textContent = '';
+    jobsBox.style.display = jobs.length ? 'block' : 'none';
+    jobs.forEach(function (j) {
+      var tr = el('div', undefined, 'cc-job');
+      var a = el('div', (j.op === 'move' ? 'Move' : 'Copy') + ': ' + itemsText(j.names), 'cc-what');
+      a.title = j.names.join('\n');
+      var p = el('div', j.src + '  →  ' + j.dst, 'cc-paths cc-dim');
+      p.title = j.src + '  →  ' + j.dst;
+      var pr = el('div', undefined, 'cc-prog');
+      var bar = el('progress');
+      bar.max = 100;
+      bar.value = j.pct;
+      pr.appendChild(bar);
+      pr.appendChild(document.createTextNode(' ' + j.pct + '%'));
+      var info = el('div', j.state === 'running' ? (j.rate + (j.eta ? '  ETA ' + j.eta : '')) : (j.msg || ''), 'cc-info cc-dim');
+      if (j.msg) info.title = j.msg;
+      var st = el('div', j.state, 'cc-state cc-st-' + j.state);
+      var ac = el('div', undefined, 'cc-acts');
+      if (j.state === 'running' || j.state === 'queued') {
+        ac.appendChild(button('Cancel', function () { act('cancel', j.id); }));
+      } else {
+        if (j.state !== 'done') ac.appendChild(button('Resume', function () { act('resume', j.id); }));
+        ac.appendChild(button('Remove', function () { act('dismiss', j.id); }));
+      }
+      [a, p, pr, info, st, ac].forEach(function (c) { tr.appendChild(c); });
+      jobsBody.appendChild(tr);
+    });
+  }
+
+  function poll() {
+    clearTimeout(timer);
+    if (document.hidden) { timer = setTimeout(poll, 5000); return; }
+    post({action: 'list'}).then(function (r) {
+      var active = false;
+      if (r.ok) {
+        render(r.jobs);
+        r.jobs.forEach(function (j) {
+          if (j.state === 'running' || j.state === 'queued') active = true;
+          if (prev[j.id] && (prev[j.id] === 'running' || prev[j.id] === 'queued') && j.state === 'done' && frame && frame.contentWindow) {
+            frame.contentWindow.postMessage({type: 'cc-refresh'}, new URL(frame.src).origin);
+          }
+          prev[j.id] = j.state;
+        });
+      }
+      timer = setTimeout(poll, active ? 2000 : 15000);
+    }).catch(function () { timer = setTimeout(poll, 15000); });
+  }
+
+  document.getElementById('cc-clear').addEventListener('click', function () {
+    post({action: 'list'}).then(function (r) {
+      if (!r.ok) return;
+      return Promise.all(r.jobs.filter(function (j) { return j.state === 'done'; })
+        .map(function (j) { return post({action: 'dismiss', id: j.id}); }));
+    }).then(poll);
+  });
+
+  window.addEventListener('message', function (e) {
+    if (!frame || e.source !== frame.contentWindow || e.origin !== new URL(frame.src).origin) return;
+    var d = e.data;
+    if (!d || typeof d !== 'object') return;
+    if (d.type === 'cc-hello') {
+      e.source.postMessage({type: 'cc-ready'}, e.origin);
+    } else if (d.type === 'cc-job') {
+      handleJob(d);
+    }
+  });
+
+  function handleJob(d) {
+    if ((d.op !== 'copy' && d.op !== 'move') || typeof d.src !== 'string' || typeof d.dst !== 'string' ||
+        !Array.isArray(d.names) || !d.names.length || d.names.length > 2000 ||
+        !d.names.every(function (n) { return typeof n === 'string'; })) return;
+    if (d.src === d.dst) { alert('Source and destination panels show the same folder.'); return; }
+    var shown = d.names.slice(0, 6).join('\n  ') + (d.names.length > 6 ? '\n  ... +' + (d.names.length - 6) + ' more' : '');
+    var text = (d.op === 'move' ? 'MOVE' : 'COPY') + ' ' + d.names.length + ' item(s)\nfrom: ' + d.src + '\nto:   ' + d.dst + '\n\n  ' + shown +
+      '\n\nRuns in the background on the server.' + (d.op === 'move' ? ' Sources are deleted after they are copied.' : '');
+    if (!confirm(text)) return;
+    var params = {action: 'start', op: d.op, src: d.src, dst: d.dst, names: JSON.stringify(d.names)};
+    post(params).then(function (r) {
+      if (!r.ok && r.code === 'exists') {
+        var ex = (r.exists || []).join('\n  ') + (r.existsCount > r.exists.length ? '\n  ... +' + (r.existsCount - r.exists.length) + ' more' : '');
+        if (!confirm(r.existsCount + ' item(s) already exist in the destination:\n\n  ' + ex +
+            '\n\nOverwrite / merge? Files with the same size and time are skipped on copy; changed files are replaced.')) return;
+        params.overwrite = '1';
+        return post(params);
+      }
+      return r;
+    }).then(function (r) {
+      if (r && !r.ok) alert(r.error || 'failed to start');
+      poll();
+    }).catch(function () { alert('request failed'); });
+  }
+
+  function expand() {
+    if (location.protocol === 'https:') {
+      wrap.style.display = '';
+      wrap.textContent = '';
+      var n = el('div', 'This page is served over HTTPS, browsers block embedding the HTTP Cloud Commander here. Use "Open in new tab".');
+      n.id = 'cc-note';
+      wrap.appendChild(n);
+      btn.value = 'Collapse';
+      return;
+    }
+    frame = document.createElement('iframe');
+    frame.id = 'cc-frame';
+    frame.src = url;
+    frame.setAttribute('allow', 'clipboard-read; clipboard-write');
+    frame.addEventListener('load', function () { try { frame.focus(); frame.contentWindow.focus(); } catch (e) {} });
+    wrap.textContent = '';
+    wrap.appendChild(frame);
+    wrap.style.display = '';
+    btn.value = 'Collapse';
+    setMsg('fa-unlock', MSG_OPEN);
+  }
+
+  function collapse() {
+    wrap.textContent = '';
+    wrap.style.display = 'none';
+    frame = null;
+    btn.value = 'Open Cloud Commander';
+    setMsg('fa-lock', MSG_CLOSED);
+  }
+
+  btn.addEventListener('click', function () { if (wrap.style.display === 'none') { expand(); } else { collapse(); } });
+  document.addEventListener('visibilitychange', function () { if (!document.hidden) poll(); });
+  poll();
+})();
+</script>
+]]>
+</INLINE>
+</FILE>
+
+<FILE Name="/usr/local/emhttp/plugins/&name;/jobs.php" Mode="0644">
+<INLINE>
+<![CDATA[<?php
+// cloudcmd.main: background copy/move jobs (rsync) with persistent state. POST only (CSRF is enforced by the webGUI).
+//
+// Trust model: the Cloud Commander container (uid 99) can write anywhere under /mnt/user, so no root write or read
+// ever touches a path under /mnt/user except the validated source/destination (done by the unprivileged runner).
+// Job definitions live on the flash drive (persistent, root only); runtime state lives in a root-owned RAM dir.
+header('Content-Type: application/json');
+header('Cache-Control: no-store');
+
+const DEFS = '/boot/config/plugins/cloudcmd.main/jobs';   // <id>.json, survives reboot
+const RUN = '/var/local/cloudcmd.main/jobs';              // <id>/{job.json,cancel,started,w/}, w/ is writable by the runner only
+const RUNNER = '/usr/local/emhttp/plugins/cloudcmd.main/job-run.sh';
+const ROOTS = ['/user' => '/mnt/user', '/disks' => '/mnt/disks', '/remotes' => '/mnt/remotes'];
+const MAX_NAMES = 2000;
+
+function out($data, $code = 200) {
+    http_response_code($code);
+    echo json_encode($data, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+    exit;
+}
+
+function fail($msg, $code = 400, $extra = []) {
+    out(['ok' => false, 'error' => $msg] + $extra, $code);
+}
+
+// Container path (/user/..., /disks/..., /remotes/...) -> [real host path, normalized container path, root key] or null.
+function host_path($c) {
+    if (!is_string($c) || $c === '' || $c[0] !== '/' || strpos($c, "\0") !== false) return null;
+    foreach (explode('/', $c) as $seg) if ($seg === '..') return null;
+    $c = '/' . trim(preg_replace('#/+#', '/', $c), '/');
+    foreach (ROOTS as $cp => $hp) {
+        if ($c === $cp || strpos($c, $cp . '/') === 0) {
+            $r = realpath($hp . substr($c, strlen($cp)));
+            if ($r === false || !is_dir($r)) return null;
+            if ($r !== $hp && strpos($r, $hp . '/') !== 0) return null;
+            return [$r, $c, $cp];
+        }
+    }
+    return null;
+}
+
+function valid_id($id) {
+    return is_string($id) && preg_match('/^\d{8}-\d{6}-[0-9a-f]{6}$/', $id);
+}
+
+function read_json($f) {
+    if (is_link($f)) return null;
+    $d = @json_decode(@file_get_contents($f), true);
+    return is_array($d) ? $d : null;
+}
+
+function ensure_dir($d, $mode = 0755) {
+    if (!is_dir($d)) @mkdir($d, $mode, true);
+    return is_dir($d) && !is_link($d);
+}
+
+function pid_alive($pid, $id) {
+    $pid = (int)$pid;
+    if ($pid <= 0) return false;
+    $cl = @file_get_contents("/proc/$pid/cmdline");
+    return $cl !== false && strpos($cl, 'job-run.sh') !== false && strpos($cl, $id) !== false;
+}
+
+function spawn($id, $pct) {
+    $dir = RUN . '/' . $id;
+    @unlink("$dir/started");
+    touch("$dir/started");
+    exec('nohup setsid setpriv --reuid=99 --regid=100 --clear-groups ' . escapeshellarg(RUNNER) . ' ' .
+        escapeshellarg($dir) . ' ' . (int)$pct . ' >/dev/null 2>&1 &');
+}
+
+// Create the runtime dir for a job (root-owned; w/ writable by the runner).
+function prepare_run($id, $def) {
+    $dir = RUN . '/' . $id;
+    if (!ensure_dir(RUN) || !ensure_dir($dir)) return false;
+    $lock = RUN . '/.lock';
+    if (!file_exists($lock)) { file_put_contents($lock, ''); chmod($lock, 0644); }
+    if (!ensure_dir("$dir/w")) return false;
+    chown("$dir/w", 99);
+    chgrp("$dir/w", 100);
+    file_put_contents("$dir/job.json", json_encode($def, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
+    return true;
+}
+
+function job_view($id) {
+    $def = read_json(DEFS . "/$id.json");
+    if (!$def) return null;
+    $dir = RUN . '/' . $id;
+    $st = read_json("$dir/w/status.json");
+    if (!$st) {
+        $young = file_exists("$dir/started") && time() - (int)@filemtime("$dir/started") < 10;
+        $st = ['state' => $young ? 'queued' : 'interrupted', 'pct' => 0, 'bytes' => 0, 'rate' => '', 'eta' => '', 'msg' => '', 'pid' => 0];
+        if (!$young && !is_dir($dir)) $st['msg'] = 'interrupted by a restart';
+    } elseif (in_array($st['state'], ['queued', 'running'], true) && !pid_alive($st['pid'], $id)) {
+        $st['state'] = file_exists("$dir/cancel") ? 'cancelled' : 'interrupted';
+        $st['rate'] = $st['eta'] = '';
+    }
+    return [
+        'id' => $id, 'op' => $def['op'], 'src' => $def['src_c'], 'dst' => $def['dst_c'], 'names' => $def['names'],
+        'created' => $def['created'], 'state' => $st['state'], 'pct' => (int)$st['pct'], 'bytes' => (int)$st['bytes'],
+        'rate' => $st['rate'], 'eta' => $st['eta'], 'msg' => $st['msg'],
+    ];
+}
+
+function rm_tree($p) {
+    if (is_link($p) || is_file($p)) { @unlink($p); return; }
+    if (!is_dir($p)) return;
+    foreach (scandir($p) as $f) if ($f !== '.' && $f !== '..') rm_tree("$p/$f");
+    @rmdir($p);
+}
+
+if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') fail('POST only', 405);
+if (!ensure_dir(DEFS) || !ensure_dir(RUN)) fail('job storage is not available', 500);
+
+$action = $_POST['action'] ?? '';
+
+if ($action === 'list') {
+    $ids = [];
+    foreach (scandir(DEFS, SCANDIR_SORT_DESCENDING) as $f) {
+        if (substr($f, -5) === '.json' && valid_id(substr($f, 0, -5))) $ids[] = substr($f, 0, -5);
+    }
+    $jobs = [];
+    foreach (array_slice($ids, 0, 200) as $id) if ($v = job_view($id)) $jobs[] = $v;
+    out(['ok' => true, 'jobs' => $jobs]);
+}
+
+if ($action === 'start') {
+    $op = $_POST['op'] ?? '';
+    if (!in_array($op, ['copy', 'move'], true)) fail('bad operation');
+    $rawNames = $_POST['names'] ?? '';
+    if (!is_string($rawNames)) fail('bad item list');
+    $names = json_decode($rawNames, true);
+    if (!is_array($names) || !$names || count($names) > MAX_NAMES) fail('bad item list');
+    $s = host_path($_POST['src'] ?? null);
+    $d = host_path($_POST['dst'] ?? null);
+    if (!$s || !$d) fail('source or destination is not available');
+    if ($d[2] === '/remotes') fail('destination is read-only');
+    if ($op === 'move' && $s[2] === '/remotes') fail('cannot move out of a read-only location');
+    if ($s[0] === $d[0]) fail('source and destination are the same folder');
+    $exists = [];
+    foreach ($names as $n) {
+        if (!is_string($n) || $n === '' || $n === '.' || $n === '..' || strpos($n, '/') !== false || preg_match('/[\x00-\x1f\x7f]/', $n)) {
+            fail('unsupported item name (empty, "..", "/" or control characters)');
+        }
+        $p = $s[0] . '/' . $n;
+        if (!file_exists($p) && !is_link($p)) fail('item not found: ' . $n);
+        if (is_dir($p) && !is_link($p)) {
+            $r = realpath($p);
+            if ($d[0] === $r || strpos($d[0] . '/', $r . '/') === 0) fail('destination is inside the source: ' . $n);
+        }
+        if (file_exists($d[0] . '/' . $n) || is_link($d[0] . '/' . $n)) $exists[] = $n;
+    }
+    if ($exists && ($_POST['overwrite'] ?? '') !== '1') {
+        fail('already exist in the destination', 409, ['code' => 'exists', 'exists' => array_slice($exists, 0, 20), 'existsCount' => count($exists)]);
+    }
+    $id = date('Ymd-His') . '-' . bin2hex(random_bytes(3));
+    $def = ['id' => $id, 'op' => $op, 'src' => $s[0], 'dst' => $d[0], 'src_c' => $s[1], 'dst_c' => $d[1], 'names' => array_values($names), 'created' => time()];
+    if (!prepare_run($id, $def)) fail('cannot create job', 500);
+    file_put_contents(DEFS . "/$id.json", json_encode($def, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
+    spawn($id, 0);
+    out(['ok' => true, 'id' => $id]);
+}
+
+$id = $_POST['id'] ?? '';
+if (!valid_id($id)) fail('unknown job', 404);
+$v = job_view($id);
+if (!$v) fail('unknown job', 404);
+$dir = RUN . '/' . $id;
+
+if ($action === 'cancel') {
+    if (!in_array($v['state'], ['queued', 'running'], true)) fail('job is not running');
+    touch("$dir/cancel");
+    $st = read_json("$dir/w/status.json");
+    if ($st && pid_alive($st['pid'], $id)) exec('kill -TERM -- -' . (int)$st['pid']);
+    out(['ok' => true]);
+}
+
+if ($action === 'resume') {
+    if (!in_array($v['state'], ['interrupted', 'cancelled', 'failed'], true)) fail('job cannot be resumed');
+    $def = read_json(DEFS . "/$id.json");
+    if (!$def || !prepare_run($id, $def)) fail('cannot prepare job', 500);
+    @unlink("$dir/cancel");
+    @unlink("$dir/w/status.json");
+    spawn($id, $v['pct']);
+    out(['ok' => true]);
+}
+
+if ($action === 'dismiss') {
+    if (in_array($v['state'], ['queued', 'running'], true)) fail('job is running');
+    @unlink(DEFS . "/$id.json");
+    rm_tree($dir);
+    out(['ok' => true]);
+}
+
+fail('unknown action');
+]]>
+</INLINE>
+</FILE>
+
+<FILE Name="/usr/local/emhttp/plugins/&name;/job-run.sh" Mode="0755">
+<INLINE>
+<![CDATA[#!/bin/bash
+# cloudcmd.main job runner: rsync copy/move with persistent status.json.
+# Started by jobs.php as nobody:users (setsid + setpriv). Usage: job-run.sh <rundir> [start-pct]
+# <rundir> is root-owned; only <rundir>/w is writable here.
+J="$1"
+START_PCT="${2:-0}"
+
+# Do not keep the webGUI's inherited descriptors (sockets, scripts).
+for f in /proc/$$/fd/*; do
+    n=${f##*/}
+    if [ "$n" -gt 2 ] 2>/dev/null && [ "$n" -lt 255 ]; then eval "exec $n>&-"; fi
+done
+
+[ -d "$J/w" ] && cd "$J/w" || exit 1
+
+op=$(jq -r .op ../job.json)
+src=$(jq -r .src ../job.json)
+dst=$(jq -r .dst ../job.json)
+mapfile -d '' -t names < <(jq -j '.names[] | (., "\u0000")' ../job.json)
+
+write() { # state pct bytes rate eta msg
+    jq -n --arg s "$1" --argjson p "${2:-0}" --argjson b "${3:-0}" --arg r "${4:-}" --arg e "${5:-}" --arg m "${6:-}" \
+        --argjson pid "$$" --argjson t "$(date +%s)" \
+        '{state:$s,pct:$p,bytes:$b,rate:$r,eta:$e,msg:$m,pid:$pid,updated:$t}' > status.tmp && mv -f status.tmp status.json
+}
+
+write queued "$START_PCT"
+exec 9< ../../.lock
+flock 9
+if [ -e ../cancel ]; then write cancelled "$START_PCT" 0 "" "" "cancelled while queued"; exit 0; fi
+
+# On resume of a move the already moved names are gone: skip them.
+srcs=()
+for n in "${names[@]}"; do
+    if [ -e "$src/$n" ] || [ -L "$src/$n" ]; then srcs+=("$src/$n"); fi
+done
+if [ ${#srcs[@]} -eq 0 ]; then write done 100 0 "" "" "nothing left to transfer"; exit 0; fi
+
+write running "$START_PCT" 0
+args=(-aH --partial --no-inc-recursive --info=progress2 --no-human-readable -s)
+# Move: never trust the size+mtime quick-check, a source is only removed after it was really transferred.
+[ "$op" = move ] && args+=(--remove-source-files --ignore-times)
+
+last=0
+rsync "${args[@]}" -- "${srcs[@]}" "$dst/" 2> rsync.err | while IFS= read -r -d $'\r' line || [ -n "$line" ]; do
+    line=${line//,/}
+    if [[ $line =~ ^[[:space:]]*([0-9]+)[[:space:]]+([0-9]+)%[[:space:]]+([^[:space:]]+)[[:space:]]+([0-9:]+) ]]; then
+        now=$(date +%s)
+        if (( now != last )); then
+            last=$now
+            write running "${BASH_REMATCH[2]}" "${BASH_REMATCH[1]}" "${BASH_REMATCH[3]}" "${BASH_REMATCH[4]}"
+        fi
+    fi
+done
+rc=${PIPESTATUS[0]}
+
+pct=$(jq -r '.pct // 0' status.json 2>/dev/null || echo 0)
+if [ "$rc" -eq 0 ]; then
+    if [ "$op" = move ]; then
+        for s in "${srcs[@]}"; do
+            if [ -d "$s" ] && [ ! -L "$s" ]; then find "$s" -depth -type d -empty -delete; fi
+        done
+    fi
+    write done 100 0 "" "" ""
+elif [ -e ../cancel ]; then
+    write cancelled "$pct" 0 "" "" "cancelled"
+else
+    write failed "$pct" 0 "" "" "rsync exit $rc: $(tail -n 3 rsync.err | tr '\n' ' ')"
+fi
+]]>
+</INLINE>
+</FILE>
+
+<FILE Run="/bin/bash">
+<INLINE>
+chmod 755 /usr/local/emhttp/plugins/&name;
+</INLINE>
+</FILE>
+
+<FILE Run="/bin/bash" Method="remove">
+<INLINE>
+rm -rf /usr/local/emhttp/plugins/&name;
+</INLINE>
+</FILE>
+
+</PLUGIN>

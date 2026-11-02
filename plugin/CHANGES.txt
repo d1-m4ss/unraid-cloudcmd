@@ -1,0 +1,14 @@
+###2026.11.01.4
+- F5/F6 inside the Main-page frame start server-side rsync jobs: progress list, cancel, resume; job state kept outside /mnt/user (flash + RAM) so the container cannot tamper with it; existing-destination confirmation.
+
+###2026.11.01.3
+- Cloud Commander port changed to 8765.
+
+###2026.11.01.2
+- Focus the iframe on load so arrow keys reach Cloud Commander without an extra click.
+
+###2026.11.01.1
+- Dark iframe background to match Cloud Commander theme.
+
+###2026.11.01
+- Initial release: collapsed Cloud Commander section on the Main tab, between pools and Boot Device.

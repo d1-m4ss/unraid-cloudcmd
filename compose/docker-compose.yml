@@ -1,0 +1,19 @@
+name: cloudcmd
+services:
+  cloudcmd:
+    container_name: cloudcmd
+    image: coderaiser/cloudcmd:latest
+    restart: unless-stopped
+    user: "99:100"
+    env_file:
+      - path: .env
+        required: true
+    ports:
+      - "8765:8000"
+    volumes:
+      - /mnt/user/appdata/cloudcmd:/config
+      - /mnt/user:/mnt/fs/user
+      - /mnt/disks:/mnt/fs/disks:rslave
+      - /mnt/remotes:/mnt/fs/remotes:ro,rslave
+      - /mnt/user/appdata/cloudcmd/patch/index.html:/usr/src/cloudcmd/dist/index.html:ro
+      - /mnt/user/appdata/cloudcmd/patch/user-keys.js:/usr/src/cloudcmd/dist/user-keys.js:ro
