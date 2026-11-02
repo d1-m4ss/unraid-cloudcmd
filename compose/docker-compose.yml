@@ -19,7 +19,7 @@ services:
       - |
         set -e
         mkdir -p /appdata/patch
-        sed 's#<script src="{{ prefix }}/dist/cloudcmd.js"></script>#&<script src="{{ prefix }}/dist/user-keys.js?v=e2fa494d"></script>#' /usr/src/cloudcmd/dist/index.html > /appdata/patch/index.html
+        sed 's#<script src="{{ prefix }}/dist/cloudcmd.js"></script>#&<script src="{{ prefix }}/dist/user-keys.js?v=4ce3f753"></script>#' /usr/src/cloudcmd/dist/index.html > /appdata/patch/index.html
         cp /user-keys.js /appdata/patch/user-keys.js
         chmod 644 /appdata/patch/index.html /appdata/patch/user-keys.js
         chown -R 99:100 /appdata
@@ -71,24 +71,15 @@ configs:
     content: |
       // Loaded by the patched dist/index.html (see README).
       //  - Right arrow = enter the folder under the cursor, Left arrow = go to the parent folder.
-      //  - Inside the Unraid Main page iframe, F5/F6 start server-side copy/move jobs (rsync, persistent progress)
-      //    through the parent page instead of Cloud Commander's own in-tab copy.
+      //  - Inside the Unraid Main page (as its frame, or as the window it opened), F5/F6 start server-side copy/move jobs
+      //    (rsync, persistent progress) through that page instead of Cloud Commander's own in-tab copy.
       (function () {
           var LEFT = 37, RIGHT = 39, ENTER = 13, BACKSPACE = 8, F5 = 116, F6 = 117;
-          var inFrame = window.parent !== window;
+          // The Unraid page that embeds this page (frame) or opened it (window.opener over https).
+          var hostWin = window.parent !== window ? window.parent : (window.opener || null);
+          var inFrame = !!hostWin;
+          var pOrigin = null;      // learned from the first cc-ready sent by hostWin; null = F5/F6 hand-off disabled
           var jobsReady = false;
-      
-          // Origin of the embedding page; null when unknown (the F5/F6 hand-off is then disabled instead of using '*').
-          function parentOrigin() {
-              try {
-                  if (location.ancestorOrigins && location.ancestorOrigins[0]) return location.ancestorOrigins[0];
-                  if (document.referrer) return new URL(document.referrer).origin;
-              } catch (e) { /* fall through */ }
-              return null;
-          }
-      
-          var pOrigin = inFrame ? parentOrigin() : null;
-          if (!pOrigin) inFrame = false;
       
           function fire(code, key) {
               var target = document.activeElement || document.body;
@@ -107,7 +98,7 @@ configs:
           function startJob(op) {
               var names = DOM.getFilenames(DOM.getActiveFiles()).filter(function (n) { return n !== '..'; });
               if (!names.length) return;
-              window.parent.postMessage({
+              hostWin.postMessage({
                   type: 'cc-job', op: op, src: DOM.getCurrentDirPath(), dst: DOM.getNotCurrentDirPath(), names: names
               }, pOrigin);
               var sel = DOM.getSelectedFiles();
@@ -116,14 +107,15 @@ configs:
       
           if (inFrame) {
               window.addEventListener('message', function (e) {
-                  if (e.source !== window.parent || !e.data) return;
+                  if (e.source !== hostWin || !e.data) return;
                   if (e.data.type === 'cc-ready') {
+                      pOrigin = e.origin;
                       jobsReady = true;
                   } else if (e.data.type === 'cc-refresh' && window.CloudCmd && CloudCmd.refresh) {
                       try { CloudCmd.refresh(); } catch (err) { /* ignore */ }
                   }
               });
-              window.parent.postMessage({type: 'cc-hello'}, pOrigin);
+              hostWin.postMessage({type: 'cc-hello'}, '*');
       
               document.addEventListener('click', function (e) {
                   var b = jobsReady && e.isTrusted && e.target.closest && e.target.closest('#f5, #f6');

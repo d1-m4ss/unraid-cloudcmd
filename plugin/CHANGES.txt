@@ -1,3 +1,8 @@
+###2026.11.01.7
+- Configurable Cloud Commander address (button "Address...") for setups behind a reverse proxy.
+- "Open in window": Cloud Commander in its own window, used automatically when the page is https and the address is http. F5/F6 jobs work there too.
+- The key script learns the Unraid page origin from its handshake instead of guessing it.
+
 ###2026.11.01.6
 - Plugin can be installed and updated by URL (pluginURL), single self-contained compose file for the container.
 

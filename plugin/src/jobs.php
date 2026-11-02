@@ -12,6 +12,7 @@ const RUN = '/var/local/cloudcmd.main/jobs';              // <id>/{job.json,canc
 const RUNNER = '/usr/local/emhttp/plugins/cloudcmd.main/job-run.sh';
 const ROOTS = ['/user' => '/mnt/user', '/disks' => '/mnt/disks', '/remotes' => '/mnt/remotes'];
 const MAX_NAMES = 2000;
+const CFG = '/boot/config/plugins/cloudcmd.main/cloudcmd.cfg';   // {"url": "..."}: address of Cloud Commander as the browser reaches it
 
 function out($data, $code = 200) {
     http_response_code($code);
@@ -159,6 +160,18 @@ if ($action === 'start') {
     file_put_contents(DEFS . "/$id.json", json_encode($def, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
     spawn($id, 0);
     out(['ok' => true, 'id' => $id]);
+}
+
+if ($action === 'setcfg') {
+    $u = $_POST['url'] ?? '';
+    if (!is_string($u) || strlen($u) > 300) fail('bad address');
+    if ($u === '') {
+        @unlink(CFG);
+        out(['ok' => true]);
+    }
+    if (!preg_match('#^https?://[^\s<>"\'\\\\]+$#', $u) || !parse_url($u, PHP_URL_HOST)) fail('the address must look like http://host:port/ or https://host/path/');
+    if (file_put_contents(CFG, json_encode(['url' => $u], JSON_UNESCAPED_SLASHES)) === false) fail('cannot save the address', 500);
+    out(['ok' => true]);
 }
 
 $id = $_POST['id'] ?? '';
