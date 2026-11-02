@@ -4,7 +4,7 @@ This repository does not contain Cloud Commander itself. It configures and exten
 
 - **Cloud Commander** (https://github.com/coderaiser/cloudcmd), MIT License, Copyright (c) coderaiser.
   The container image `coderaiser/cloudcmd` is pulled from Docker Hub at install time, and the project logo is referenced
-  by URL from the upstream repository (`compose/icon_url`).
+  by URL from the upstream repository (container labels in `compose/docker-compose.yml`).
 - The patched `index.html` is generated on the user's server by the `cloudcmd-init` helper from the image's own `dist/index.html`
   plus one extra `<script>` tag; it is not distributed here.
 - **rsync** and **jq** are used from the Unraid base system.
