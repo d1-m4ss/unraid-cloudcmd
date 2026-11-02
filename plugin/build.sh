@@ -9,7 +9,7 @@ cat <<HDR
 <?xml version='1.0' standalone='yes'?>
 <!DOCTYPE PLUGIN [
 <!ENTITY name "cloudcmd.main">
-<!ENTITY author "d13mas">
+<!ENTITY author "d1-m4ss">
 <!ENTITY version "$VERSION">
 <!ENTITY launch "Main">
 ]>

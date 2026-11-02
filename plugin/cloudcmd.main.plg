@@ -1,13 +1,16 @@
 <?xml version='1.0' standalone='yes'?>
 <!DOCTYPE PLUGIN [
 <!ENTITY name "cloudcmd.main">
-<!ENTITY author "d13mas">
-<!ENTITY version "2026.11.01.4">
+<!ENTITY author "d1-m4ss">
+<!ENTITY version "2026.11.01.5">
 <!ENTITY launch "Main">
 ]>
 <PLUGIN name="&name;" author="&author;" version="&version;" launch="&launch;" min="6.12.0" icon="columns">
 
 <CHANGES>
+###2026.11.01.5
+- Author set to d1-m4ss, shellcheck cleanups. No behavior change.
+
 ###2026.11.01.4
 - F5/F6 inside the Main-page frame start server-side rsync jobs: progress list, cancel, resume; job state kept outside /mnt/user (flash + RAM) so the container cannot tamper with it; existing-destination confirmation.
 
@@ -505,7 +508,7 @@ srcs=()
 for n in "${names[@]}"; do
     if [ -e "$src/$n" ] || [ -L "$src/$n" ]; then srcs+=("$src/$n"); fi
 done
-if [ ${#srcs[@]} -eq 0 ]; then write done 100 0 "" "" "nothing left to transfer"; exit 0; fi
+if [ ${#srcs[@]} -eq 0 ]; then write "done" 100 0 "" "" "nothing left to transfer"; exit 0; fi
 
 write running "$START_PCT" 0
 args=(-aH --partial --no-inc-recursive --info=progress2 --no-human-readable -s)
@@ -532,7 +535,7 @@ if [ "$rc" -eq 0 ]; then
             if [ -d "$s" ] && [ ! -L "$s" ]; then find "$s" -depth -type d -empty -delete; fi
         done
     fi
-    write done 100 0 "" "" ""
+    write "done" 100 0 "" "" ""
 elif [ -e ../cancel ]; then
     write cancelled "$pct" 0 "" "" "cancelled"
 else

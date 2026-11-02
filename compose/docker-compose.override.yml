@@ -6,9 +6,6 @@
         "net.unraid.docker.shell": "/bin/sh",
         "net.unraid.docker.webui": "http://[IP]:[PORT:8000]/",
         "net.unraid.docker.icon": "https://raw.githubusercontent.com/coderaiser/cloudcmd/master/img/logo/cloudcmd.png"
-      },
-      "environment": {
-        "TZ": "Europe/Bucharest"
       }
     }
   }

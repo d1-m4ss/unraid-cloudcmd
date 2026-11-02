@@ -34,7 +34,7 @@ srcs=()
 for n in "${names[@]}"; do
     if [ -e "$src/$n" ] || [ -L "$src/$n" ]; then srcs+=("$src/$n"); fi
 done
-if [ ${#srcs[@]} -eq 0 ]; then write done 100 0 "" "" "nothing left to transfer"; exit 0; fi
+if [ ${#srcs[@]} -eq 0 ]; then write "done" 100 0 "" "" "nothing left to transfer"; exit 0; fi
 
 write running "$START_PCT" 0
 args=(-aH --partial --no-inc-recursive --info=progress2 --no-human-readable -s)
@@ -61,7 +61,7 @@ if [ "$rc" -eq 0 ]; then
             if [ -d "$s" ] && [ ! -L "$s" ]; then find "$s" -depth -type d -empty -delete; fi
         done
     fi
-    write done 100 0 "" "" ""
+    write "done" 100 0 "" "" ""
 elif [ -e ../cancel ]; then
     write cancelled "$pct" 0 "" "" "cancelled"
 else
