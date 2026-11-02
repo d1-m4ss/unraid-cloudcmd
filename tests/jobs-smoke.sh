@@ -64,8 +64,12 @@ check "same folder is rejected" err_is "$(api "{\"action\":\"start\",\"op\":\"co
 check "'..' in a name is rejected" err_is "$(api "{\"action\":\"start\",\"op\":\"copy\",\"src\":\"$C/src\",\"dst\":\"$C/dst\",\"names\":[\"..\"]}")" "unsupported item name"
 check "control character in a name is rejected" err_is "$(api "{\"action\":\"start\",\"op\":\"copy\",\"src\":\"$C/src\",\"dst\":\"$C/dst\",\"names\":[\"a\\nb\"]}")" "unsupported item name"
 check "'..' in a path is rejected" err_is "$(api "{\"action\":\"start\",\"op\":\"copy\",\"src\":\"$C/src/../src\",\"dst\":\"$C/dst\",\"names\":[\"file1.txt\"]}")" "not available"
-check "/remotes as destination is rejected" err_is "$(api "{\"action\":\"start\",\"op\":\"copy\",\"src\":\"$C/src\",\"dst\":\"/remotes\",\"names\":[\"file1.txt\"]}")" "read-only"
-check "move out of /remotes is rejected" err_is "$(api "{\"action\":\"start\",\"op\":\"move\",\"src\":\"/remotes\",\"dst\":\"$C/dst\",\"names\":[\"x\"]}")" "read-only"
+if [ -d /mnt/remotes ]; then
+    check "/remotes as destination is rejected" err_is "$(api "{\"action\":\"start\",\"op\":\"copy\",\"src\":\"$C/src\",\"dst\":\"/remotes\",\"names\":[\"file1.txt\"]}")" "read-only"
+    check "move out of /remotes is rejected" err_is "$(api "{\"action\":\"start\",\"op\":\"move\",\"src\":\"/remotes\",\"dst\":\"$C/dst\",\"names\":[\"x\"]}")" "read-only"
+else
+    skip "/remotes checks (no /mnt/remotes on this host)"
+fi
 check "missing item is rejected" err_is "$(api "{\"action\":\"start\",\"op\":\"copy\",\"src\":\"$C/src\",\"dst\":\"$C/dst\",\"names\":[\"nope\"]}")" "not found"
 
 echo "== copy"
