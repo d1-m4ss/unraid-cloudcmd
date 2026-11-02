@@ -1,6 +1,7 @@
 # Cloud Commander for Unraid (https://github.com/coderaiser/cloudcmd).
 # One self-contained file: paste it into Docker -> Compose -> Add New Stack, then Compose Up.
 # Generated from docker-compose.template.yml + user-keys.js by compose/build-compose.sh: edit those, not this file.
+# Works with any Docker Compose v2 (no 'configs: content', no propagation flags).
 #
 # Change before the first start if you need to:  TZ (time zone), the host port (8765) and the mounted folders.
 # Login and password are NOT set here: open the page, press F10 and enable Auth.
@@ -20,14 +21,11 @@ services:
         set -e
         mkdir -p /appdata/patch
         sed 's#<script src="{{ prefix }}/dist/cloudcmd.js"></script>#&<script src="{{ prefix }}/dist/user-keys.js?v=4ce3f753"></script>#' /usr/src/cloudcmd/dist/index.html > /appdata/patch/index.html
-        cp /user-keys.js /appdata/patch/user-keys.js
+        echo 'Ly8gTG9hZGVkIGJ5IHRoZSBwYXRjaGVkIGRpc3QvaW5kZXguaHRtbCAoc2VlIFJFQURNRSkuCi8vICAtIFJpZ2h0IGFycm93ID0gZW50ZXIgdGhlIGZvbGRlciB1bmRlciB0aGUgY3Vyc29yLCBMZWZ0IGFycm93ID0gZ28gdG8gdGhlIHBhcmVudCBmb2xkZXIuCi8vICAtIEluc2lkZSB0aGUgVW5yYWlkIE1haW4gcGFnZSAoYXMgaXRzIGZyYW1lLCBvciBhcyB0aGUgd2luZG93IGl0IG9wZW5lZCksIEY1L0Y2IHN0YXJ0IHNlcnZlci1zaWRlIGNvcHkvbW92ZSBqb2JzCi8vICAgIChyc3luYywgcGVyc2lzdGVudCBwcm9ncmVzcykgdGhyb3VnaCB0aGF0IHBhZ2UgaW5zdGVhZCBvZiBDbG91ZCBDb21tYW5kZXIncyBvd24gaW4tdGFiIGNvcHkuCihmdW5jdGlvbiAoKSB7CiAgICB2YXIgTEVGVCA9IDM3LCBSSUdIVCA9IDM5LCBFTlRFUiA9IDEzLCBCQUNLU1BBQ0UgPSA4LCBGNSA9IDExNiwgRjYgPSAxMTc7CiAgICAvLyBUaGUgVW5yYWlkIHBhZ2UgdGhhdCBlbWJlZHMgdGhpcyBwYWdlIChmcmFtZSkgb3Igb3BlbmVkIGl0ICh3aW5kb3cub3BlbmVyIG92ZXIgaHR0cHMpLgogICAgdmFyIGhvc3RXaW4gPSB3aW5kb3cucGFyZW50ICE9PSB3aW5kb3cgPyB3aW5kb3cucGFyZW50IDogKHdpbmRvdy5vcGVuZXIgfHwgbnVsbCk7CiAgICB2YXIgaW5GcmFtZSA9ICEhaG9zdFdpbjsKICAgIHZhciBwT3JpZ2luID0gbnVsbDsgICAgICAvLyBsZWFybmVkIGZyb20gdGhlIGZpcnN0IGNjLXJlYWR5IHNlbnQgYnkgaG9zdFdpbjsgbnVsbCA9IEY1L0Y2IGhhbmQtb2ZmIGRpc2FibGVkCiAgICB2YXIgam9ic1JlYWR5ID0gZmFsc2U7CgogICAgZnVuY3Rpb24gZmlyZShjb2RlLCBrZXkpIHsKICAgICAgICB2YXIgdGFyZ2V0ID0gZG9jdW1lbnQuYWN0aXZlRWxlbWVudCB8fCBkb2N1bWVudC5ib2R5OwogICAgICAgIHZhciBlID0gbmV3IEtleWJvYXJkRXZlbnQoJ2tleWRvd24nLCB7a2V5OiBrZXksIGtleUNvZGU6IGNvZGUsIHdoaWNoOiBjb2RlLCBidWJibGVzOiB0cnVlLCBjYW5jZWxhYmxlOiB0cnVlfSk7CiAgICAgICAgdGFyZ2V0LmRpc3BhdGNoRXZlbnQoZSk7CiAgICB9CgogICAgZnVuY3Rpb24gbW9kYWxPcGVuKCkgewogICAgICAgIHJldHVybiAhIWRvY3VtZW50LnF1ZXJ5U2VsZWN0b3IoJ1tjbGFzcyo9InNtYWxsdGFsayJdLCBbY2xhc3MqPSJtb2RhbCJdLCBbZGF0YS1uYW1lPSJqcy12aWV3Il0sIFtkYXRhLW5hbWU9ImpzLWVkaXQiXSwgW2RhdGEtbmFtZT0ianMtY29uZmlnIl0nKTsKICAgIH0KCiAgICBmdW5jdGlvbiB0eXBpbmcodCkgewogICAgICAgIHJldHVybiAhIXQgJiYgKC9eKElOUFVUfFRFWFRBUkVBfFNFTEVDVCkkLy50ZXN0KHQudGFnTmFtZSkgfHwgdC5pc0NvbnRlbnRFZGl0YWJsZSk7CiAgICB9CgogICAgZnVuY3Rpb24gc3RhcnRKb2Iob3ApIHsKICAgICAgICB2YXIgbmFtZXMgPSBET00uZ2V0RmlsZW5hbWVzKERPTS5nZXRBY3RpdmVGaWxlcygpKS5maWx0ZXIoZnVuY3Rpb24gKG4pIHsgcmV0dXJuIG4gIT09ICcuLic7IH0pOwogICAgICAgIGlmICghbmFtZXMubGVuZ3RoKSByZXR1cm47CiAgICAgICAgaG9zdFdpbi5wb3N0TWVzc2FnZSh7CiAgICAgICAgICAgIHR5cGU6ICdjYy1qb2InLCBvcDogb3AsIHNyYzogRE9NLmdldEN1cnJlbnREaXJQYXRoKCksIGRzdDogRE9NLmdldE5vdEN1cnJlbnREaXJQYXRoKCksIG5hbWVzOiBuYW1lcwogICAgICAgIH0sIHBPcmlnaW4pOwogICAgICAgIHZhciBzZWwgPSBET00uZ2V0U2VsZWN0ZWRGaWxlcygpOwogICAgICAgIGlmIChzZWwgJiYgc2VsLmxlbmd0aCkgRE9NLnVuc2VsZWN0RmlsZXMoc2VsKTsKICAgIH0KCiAgICBpZiAoaW5GcmFtZSkgewogICAgICAgIHdpbmRvdy5hZGRFdmVudExpc3RlbmVyKCdtZXNzYWdlJywgZnVuY3Rpb24gKGUpIHsKICAgICAgICAgICAgaWYgKGUuc291cmNlICE9PSBob3N0V2luIHx8ICFlLmRhdGEpIHJldHVybjsKICAgICAgICAgICAgaWYgKGUuZGF0YS50eXBlID09PSAnY2MtcmVhZHknKSB7CiAgICAgICAgICAgICAgICBwT3JpZ2luID0gZS5vcmlnaW47CiAgICAgICAgICAgICAgICBqb2JzUmVhZHkgPSB0cnVlOwogICAgICAgICAgICB9IGVsc2UgaWYgKGUuZGF0YS50eXBlID09PSAnY2MtcmVmcmVzaCcgJiYgd2luZG93LkNsb3VkQ21kICYmIENsb3VkQ21kLnJlZnJlc2gpIHsKICAgICAgICAgICAgICAgIHRyeSB7IENsb3VkQ21kLnJlZnJlc2goKTsgfSBjYXRjaCAoZXJyKSB7IC8qIGlnbm9yZSAqLyB9CiAgICAgICAgICAgIH0KICAgICAgICB9KTsKICAgICAgICBob3N0V2luLnBvc3RNZXNzYWdlKHt0eXBlOiAnY2MtaGVsbG8nfSwgJyonKTsKCiAgICAgICAgZG9jdW1lbnQuYWRkRXZlbnRMaXN0ZW5lcignY2xpY2snLCBmdW5jdGlvbiAoZSkgewogICAgICAgICAgICB2YXIgYiA9IGpvYnNSZWFkeSAmJiBlLmlzVHJ1c3RlZCAmJiBlLnRhcmdldC5jbG9zZXN0ICYmIGUudGFyZ2V0LmNsb3Nlc3QoJyNmNSwgI2Y2Jyk7CiAgICAgICAgICAgIGlmICghYiB8fCB0eXBlb2YgRE9NID09PSAndW5kZWZpbmVkJyB8fCBtb2RhbE9wZW4oKSkgcmV0dXJuOwogICAgICAgICAgICBlLnByZXZlbnREZWZhdWx0KCk7CiAgICAgICAgICAgIGUuc3RvcEltbWVkaWF0ZVByb3BhZ2F0aW9uKCk7CiAgICAgICAgICAgIHN0YXJ0Sm9iKGIuaWQgPT09ICdmNScgPyAnY29weScgOiAnbW92ZScpOwogICAgICAgIH0sIHRydWUpOwogICAgfQoKICAgIHdpbmRvdy5hZGRFdmVudExpc3RlbmVyKCdrZXlkb3duJywgZnVuY3Rpb24gKGUpIHsKICAgICAgICBpZiAoIWUuaXNUcnVzdGVkKSByZXR1cm47CiAgICAgICAgaWYgKGUuYWx0S2V5IHx8IGUuY3RybEtleSB8fCBlLm1ldGFLZXkgfHwgZS5zaGlmdEtleSkgcmV0dXJuOwogICAgICAgIGlmICh0eXBpbmcoZS50YXJnZXQpKSByZXR1cm47CiAgICAgICAgaWYgKHR5cGVvZiBET00gPT09ICd1bmRlZmluZWQnIHx8ICFET00uQ3VycmVudEluZm8gfHwgbW9kYWxPcGVuKCkpIHJldHVybjsKCiAgICAgICAgaWYgKChlLmtleUNvZGUgPT09IEY1IHx8IGUua2V5Q29kZSA9PT0gRjYpICYmIGluRnJhbWUgJiYgam9ic1JlYWR5KSB7CiAgICAgICAgICAgIGUucHJldmVudERlZmF1bHQoKTsKICAgICAgICAgICAgZS5zdG9wSW1tZWRpYXRlUHJvcGFnYXRpb24oKTsKICAgICAgICAgICAgc3RhcnRKb2IoZS5rZXlDb2RlID09PSBGNSA/ICdjb3B5JyA6ICdtb3ZlJyk7CiAgICAgICAgICAgIHJldHVybjsKICAgICAgICB9CiAgICAgICAgaWYgKGUua2V5Q29kZSAhPT0gTEVGVCAmJiBlLmtleUNvZGUgIT09IFJJR0hUKSByZXR1cm47CgogICAgICAgIHZhciBjdXIgPSBET00uQ3VycmVudEluZm87CiAgICAgICAgaWYgKGUua2V5Q29kZSA9PT0gUklHSFQpIHsKICAgICAgICAgICAgaWYgKGN1ci5pc0RpciAmJiBjdXIubmFtZSAhPT0gJy4uJykgZmlyZShFTlRFUiwgJ0VudGVyJyk7CiAgICAgICAgfSBlbHNlIGlmIChjdXIuZGlyUGF0aCAmJiBjdXIuZGlyUGF0aCAhPT0gJy8nKSB7CiAgICAgICAgICAgIGZpcmUoQkFDS1NQQUNFLCAnQmFja3NwYWNlJyk7CiAgICAgICAgfQogICAgICAgIGUucHJldmVudERlZmF1bHQoKTsKICAgICAgICBlLnN0b3BJbW1lZGlhdGVQcm9wYWdhdGlvbigpOwogICAgfSwgdHJ1ZSk7Cn0oKSk7Cg==' | base64 -d > /appdata/patch/user-keys.js
         chmod 644 /appdata/patch/index.html /appdata/patch/user-keys.js
         chown -R 99:100 /appdata
     volumes:
       - /mnt/user/appdata/cloudcmd:/appdata
-    configs:
-      - source: user-keys
-        target: /user-keys.js
     labels:
       net.unraid.docker.managed: composeman
       net.unraid.docker.icon: https://raw.githubusercontent.com/coderaiser/cloudcmd/master/img/logo/cloudcmd.png
@@ -56,8 +54,9 @@ services:
     volumes:
       - /mnt/user/appdata/cloudcmd:/config
       - /mnt/user:/mnt/fs/user
-      - /mnt/disks:/mnt/fs/disks:rslave
-      - /mnt/remotes:/mnt/fs/remotes:ro,rslave
+      # Optional (needs the Unassigned Devices plugin, otherwise Docker refuses the mount): uncomment to browse them too.
+      # - /mnt/disks:/mnt/fs/disks:rw,slave
+      # - /mnt/remotes:/mnt/fs/remotes:ro,slave
       - /mnt/user/appdata/cloudcmd/patch/index.html:/usr/src/cloudcmd/dist/index.html:ro
       - /mnt/user/appdata/cloudcmd/patch/user-keys.js:/usr/src/cloudcmd/dist/user-keys.js:ro
     labels:
@@ -65,88 +64,3 @@ services:
       net.unraid.docker.shell: /bin/sh
       net.unraid.docker.webui: http://[IP]:[PORT:8000]/
       net.unraid.docker.icon: https://raw.githubusercontent.com/coderaiser/cloudcmd/master/img/logo/cloudcmd.png
-
-configs:
-  user-keys:
-    content: |
-      // Loaded by the patched dist/index.html (see README).
-      //  - Right arrow = enter the folder under the cursor, Left arrow = go to the parent folder.
-      //  - Inside the Unraid Main page (as its frame, or as the window it opened), F5/F6 start server-side copy/move jobs
-      //    (rsync, persistent progress) through that page instead of Cloud Commander's own in-tab copy.
-      (function () {
-          var LEFT = 37, RIGHT = 39, ENTER = 13, BACKSPACE = 8, F5 = 116, F6 = 117;
-          // The Unraid page that embeds this page (frame) or opened it (window.opener over https).
-          var hostWin = window.parent !== window ? window.parent : (window.opener || null);
-          var inFrame = !!hostWin;
-          var pOrigin = null;      // learned from the first cc-ready sent by hostWin; null = F5/F6 hand-off disabled
-          var jobsReady = false;
-      
-          function fire(code, key) {
-              var target = document.activeElement || document.body;
-              var e = new KeyboardEvent('keydown', {key: key, keyCode: code, which: code, bubbles: true, cancelable: true});
-              target.dispatchEvent(e);
-          }
-      
-          function modalOpen() {
-              return !!document.querySelector('[class*="smalltalk"], [class*="modal"], [data-name="js-view"], [data-name="js-edit"], [data-name="js-config"]');
-          }
-      
-          function typing(t) {
-              return !!t && (/^(INPUT|TEXTAREA|SELECT)$$/.test(t.tagName) || t.isContentEditable);
-          }
-      
-          function startJob(op) {
-              var names = DOM.getFilenames(DOM.getActiveFiles()).filter(function (n) { return n !== '..'; });
-              if (!names.length) return;
-              hostWin.postMessage({
-                  type: 'cc-job', op: op, src: DOM.getCurrentDirPath(), dst: DOM.getNotCurrentDirPath(), names: names
-              }, pOrigin);
-              var sel = DOM.getSelectedFiles();
-              if (sel && sel.length) DOM.unselectFiles(sel);
-          }
-      
-          if (inFrame) {
-              window.addEventListener('message', function (e) {
-                  if (e.source !== hostWin || !e.data) return;
-                  if (e.data.type === 'cc-ready') {
-                      pOrigin = e.origin;
-                      jobsReady = true;
-                  } else if (e.data.type === 'cc-refresh' && window.CloudCmd && CloudCmd.refresh) {
-                      try { CloudCmd.refresh(); } catch (err) { /* ignore */ }
-                  }
-              });
-              hostWin.postMessage({type: 'cc-hello'}, '*');
-      
-              document.addEventListener('click', function (e) {
-                  var b = jobsReady && e.isTrusted && e.target.closest && e.target.closest('#f5, #f6');
-                  if (!b || typeof DOM === 'undefined' || modalOpen()) return;
-                  e.preventDefault();
-                  e.stopImmediatePropagation();
-                  startJob(b.id === 'f5' ? 'copy' : 'move');
-              }, true);
-          }
-      
-          window.addEventListener('keydown', function (e) {
-              if (!e.isTrusted) return;
-              if (e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
-              if (typing(e.target)) return;
-              if (typeof DOM === 'undefined' || !DOM.CurrentInfo || modalOpen()) return;
-      
-              if ((e.keyCode === F5 || e.keyCode === F6) && inFrame && jobsReady) {
-                  e.preventDefault();
-                  e.stopImmediatePropagation();
-                  startJob(e.keyCode === F5 ? 'copy' : 'move');
-                  return;
-              }
-              if (e.keyCode !== LEFT && e.keyCode !== RIGHT) return;
-      
-              var cur = DOM.CurrentInfo;
-              if (e.keyCode === RIGHT) {
-                  if (cur.isDir && cur.name !== '..') fire(ENTER, 'Enter');
-              } else if (cur.dirPath && cur.dirPath !== '/') {
-                  fire(BACKSPACE, 'Backspace');
-              }
-              e.preventDefault();
-              e.stopImmediatePropagation();
-          }, true);
-      }());

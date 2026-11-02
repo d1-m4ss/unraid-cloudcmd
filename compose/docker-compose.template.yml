@@ -1,6 +1,7 @@
 # Cloud Commander for Unraid (https://github.com/coderaiser/cloudcmd).
 # One self-contained file: paste it into Docker -> Compose -> Add New Stack, then Compose Up.
 # Generated from docker-compose.template.yml + user-keys.js by compose/build-compose.sh: edit those, not this file.
+# Works with any Docker Compose v2 (no 'configs: content', no propagation flags).
 #
 # Change before the first start if you need to:  TZ (time zone), the host port (8765) and the mounted folders.
 # Login and password are NOT set here: open the page, press F10 and enable Auth.
@@ -20,14 +21,11 @@ services:
         set -e
         mkdir -p /appdata/patch
         sed 's#<script src="{{ prefix }}/dist/cloudcmd.js"></script>#&<script src="{{ prefix }}/dist/user-keys.js?v=@@KEYSVER@@"></script>#' /usr/src/cloudcmd/dist/index.html > /appdata/patch/index.html
-        cp /user-keys.js /appdata/patch/user-keys.js
+        echo '@@KEYSB64@@' | base64 -d > /appdata/patch/user-keys.js
         chmod 644 /appdata/patch/index.html /appdata/patch/user-keys.js
         chown -R 99:100 /appdata
     volumes:
       - /mnt/user/appdata/cloudcmd:/appdata
-    configs:
-      - source: user-keys
-        target: /user-keys.js
     labels:
       net.unraid.docker.managed: composeman
       net.unraid.docker.icon: https://raw.githubusercontent.com/coderaiser/cloudcmd/master/img/logo/cloudcmd.png
@@ -56,8 +54,9 @@ services:
     volumes:
       - /mnt/user/appdata/cloudcmd:/config
       - /mnt/user:/mnt/fs/user
-      - /mnt/disks:/mnt/fs/disks:rslave
-      - /mnt/remotes:/mnt/fs/remotes:ro,rslave
+      # Optional (needs the Unassigned Devices plugin, otherwise Docker refuses the mount): uncomment to browse them too.
+      # - /mnt/disks:/mnt/fs/disks:rw,slave
+      # - /mnt/remotes:/mnt/fs/remotes:ro,slave
       - /mnt/user/appdata/cloudcmd/patch/index.html:/usr/src/cloudcmd/dist/index.html:ro
       - /mnt/user/appdata/cloudcmd/patch/user-keys.js:/usr/src/cloudcmd/dist/user-keys.js:ro
     labels:
@@ -65,8 +64,3 @@ services:
       net.unraid.docker.shell: /bin/sh
       net.unraid.docker.webui: http://[IP]:[PORT:8000]/
       net.unraid.docker.icon: https://raw.githubusercontent.com/coderaiser/cloudcmd/master/img/logo/cloudcmd.png
-
-configs:
-  user-keys:
-    content: |
-@@KEYS@@

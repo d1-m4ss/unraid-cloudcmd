@@ -40,7 +40,7 @@ Good to know:
 - Over HTTPS (for example through Tailscale) browsers do not embed the HTTP frame. The page shows a hint, use "Open in new tab".
 - Move really copies the data and removes the source only after a successful transfer.
 - Operations run as `nobody:users` (99:100): files this user cannot read are not copied.
-- Mounted: `/mnt/user`, `/mnt/disks`, `/mnt/remotes` (read-only). `/mnt/diskN` and `/mnt/cache` are intentionally not mounted: do not mix user shares and disks.
+- Mounted by default: `/mnt/user` only. `/mnt/disks` and `/mnt/remotes` (Unassigned Devices) are commented out in the YAML because Docker refuses them on servers without that plugin; uncomment the two lines if you have it. `/mnt/diskN` and `/mnt/cache` are intentionally not mounted: do not mix user shares and disks.
 
 ## How the container file works
 
