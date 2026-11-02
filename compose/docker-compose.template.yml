@@ -1,0 +1,72 @@
+# Cloud Commander for Unraid (https://github.com/coderaiser/cloudcmd).
+# One self-contained file: paste it into Docker -> Compose -> Add New Stack, then Compose Up.
+# Generated from docker-compose.template.yml + user-keys.js by compose/build-compose.sh: edit those, not this file.
+#
+# Change before the first start if you need to:  TZ (time zone), the host port (8765) and the mounted folders.
+# Login and password are NOT set here: open the page, press F10 and enable Auth.
+name: cloudcmd
+
+services:
+  # One-shot helper: prepares the appdata folder and creates the patched page (arrows Left/Right, F5/F6 jobs).
+  # It runs on every "up", so the patch follows the current image automatically.
+  cloudcmd-init:
+    image: coderaiser/cloudcmd:latest
+    container_name: cloudcmd-init
+    restart: "no"
+    user: "0:0"
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        set -e
+        mkdir -p /appdata/patch
+        sed 's#<script src="{{ prefix }}/dist/cloudcmd.js"></script>#&<script src="{{ prefix }}/dist/user-keys.js?v=@@KEYSVER@@"></script>#' /usr/src/cloudcmd/dist/index.html > /appdata/patch/index.html
+        cp /user-keys.js /appdata/patch/user-keys.js
+        chmod 644 /appdata/patch/index.html /appdata/patch/user-keys.js
+        chown -R 99:100 /appdata
+    volumes:
+      - /mnt/user/appdata/cloudcmd:/appdata
+    configs:
+      - source: user-keys
+        target: /user-keys.js
+    labels:
+      net.unraid.docker.managed: composeman
+      net.unraid.docker.icon: https://raw.githubusercontent.com/coderaiser/cloudcmd/master/img/logo/cloudcmd.png
+
+  cloudcmd:
+    image: coderaiser/cloudcmd:latest
+    container_name: cloudcmd
+    restart: unless-stopped
+    user: "99:100"
+    depends_on:
+      cloudcmd-init:
+        condition: service_completed_successfully
+    environment:
+      TZ: UTC                    # your time zone, e.g. Europe/Berlin
+      HOME: /config
+      CLOUDCMD_ROOT: /mnt/fs
+      CLOUDCMD_TERMINAL: "false"
+      CLOUDCMD_CONSOLE: "true"
+      CLOUDCMD_OPEN: "false"
+      CLOUDCMD_NAME: Unraid Cloud Commander
+      CLOUDCMD_ONE_FILE_PANEL: "false"
+      CLOUDCMD_CONFIRM_COPY: "true"
+      CLOUDCMD_CONFIRM_MOVE: "true"
+    ports:
+      - "8765:8000"              # keep in sync with $cc_port of the cloudcmd.main plugin
+    volumes:
+      - /mnt/user/appdata/cloudcmd:/config
+      - /mnt/user:/mnt/fs/user
+      - /mnt/disks:/mnt/fs/disks:rslave
+      - /mnt/remotes:/mnt/fs/remotes:ro,rslave
+      - /mnt/user/appdata/cloudcmd/patch/index.html:/usr/src/cloudcmd/dist/index.html:ro
+      - /mnt/user/appdata/cloudcmd/patch/user-keys.js:/usr/src/cloudcmd/dist/user-keys.js:ro
+    labels:
+      net.unraid.docker.managed: composeman
+      net.unraid.docker.shell: /bin/sh
+      net.unraid.docker.webui: http://[IP]:[PORT:8000]/
+      net.unraid.docker.icon: https://raw.githubusercontent.com/coderaiser/cloudcmd/master/img/logo/cloudcmd.png
+
+configs:
+  user-keys:
+    content: |
+@@KEYS@@

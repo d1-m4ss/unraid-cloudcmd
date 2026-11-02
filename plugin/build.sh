@@ -3,6 +3,8 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 VERSION="${1:?usage: build.sh <version>}"
+# Raw URL of the repository root (the plugin updates itself from here). Override with GIT_RAW=... .
+RAW="${GIT_RAW:-https://raw.githubusercontent.com/d1-m4ss/unraid-cloudcmd/main}"
 for f in src/*; do ! grep -q ']]>' "$f" || { echo "']]>' found in $f" >&2; exit 1; }; done
 {
 cat <<HDR
@@ -12,8 +14,10 @@ cat <<HDR
 <!ENTITY author "d1-m4ss">
 <!ENTITY version "$VERSION">
 <!ENTITY launch "Main">
+<!ENTITY gitURL "$RAW">
+<!ENTITY pluginURL "&gitURL;/plugin/cloudcmd.main.plg">
 ]>
-<PLUGIN name="&name;" author="&author;" version="&version;" launch="&launch;" min="6.12.0" icon="columns">
+<PLUGIN name="&name;" author="&author;" version="&version;" launch="&launch;" pluginURL="&pluginURL;" min="6.12.0" icon="columns">
 
 <CHANGES>
 $(cat CHANGES.txt)

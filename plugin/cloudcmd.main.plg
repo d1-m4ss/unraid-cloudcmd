@@ -2,12 +2,17 @@
 <!DOCTYPE PLUGIN [
 <!ENTITY name "cloudcmd.main">
 <!ENTITY author "d1-m4ss">
-<!ENTITY version "2026.11.01.5">
+<!ENTITY version "2026.11.01.6">
 <!ENTITY launch "Main">
+<!ENTITY gitURL "https://raw.githubusercontent.com/d1-m4ss/unraid-cloudcmd/main">
+<!ENTITY pluginURL "&gitURL;/plugin/cloudcmd.main.plg">
 ]>
-<PLUGIN name="&name;" author="&author;" version="&version;" launch="&launch;" min="6.12.0" icon="columns">
+<PLUGIN name="&name;" author="&author;" version="&version;" launch="&launch;" pluginURL="&pluginURL;" min="6.12.0" icon="columns">
 
 <CHANGES>
+###2026.11.01.6
+- Plugin can be installed and updated by URL (pluginURL), single self-contained compose file for the container.
+
 ###2026.11.01.5
 - Author set to d1-m4ss, shellcheck cleanups. No behavior change.
 

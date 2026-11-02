@@ -1,15 +1,58 @@
+# Cloud Commander for Unraid (https://github.com/coderaiser/cloudcmd).
+# One self-contained file: paste it into Docker -> Compose -> Add New Stack, then Compose Up.
+# Generated from docker-compose.template.yml + user-keys.js by compose/build-compose.sh: edit those, not this file.
+#
+# Change before the first start if you need to:  TZ (time zone), the host port (8765) and the mounted folders.
+# Login and password are NOT set here: open the page, press F10 and enable Auth.
 name: cloudcmd
+
 services:
-  cloudcmd:
-    container_name: cloudcmd
+  # One-shot helper: prepares the appdata folder and creates the patched page (arrows Left/Right, F5/F6 jobs).
+  # It runs on every "up", so the patch follows the current image automatically.
+  cloudcmd-init:
     image: coderaiser/cloudcmd:latest
+    container_name: cloudcmd-init
+    restart: "no"
+    user: "0:0"
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        set -e
+        mkdir -p /appdata/patch
+        sed 's#<script src="{{ prefix }}/dist/cloudcmd.js"></script>#&<script src="{{ prefix }}/dist/user-keys.js?v=e2fa494d"></script>#' /usr/src/cloudcmd/dist/index.html > /appdata/patch/index.html
+        cp /user-keys.js /appdata/patch/user-keys.js
+        chmod 644 /appdata/patch/index.html /appdata/patch/user-keys.js
+        chown -R 99:100 /appdata
+    volumes:
+      - /mnt/user/appdata/cloudcmd:/appdata
+    configs:
+      - source: user-keys
+        target: /user-keys.js
+    labels:
+      net.unraid.docker.managed: composeman
+      net.unraid.docker.icon: https://raw.githubusercontent.com/coderaiser/cloudcmd/master/img/logo/cloudcmd.png
+
+  cloudcmd:
+    image: coderaiser/cloudcmd:latest
+    container_name: cloudcmd
     restart: unless-stopped
     user: "99:100"
-    env_file:
-      - path: .env
-        required: true
+    depends_on:
+      cloudcmd-init:
+        condition: service_completed_successfully
+    environment:
+      TZ: UTC                    # your time zone, e.g. Europe/Berlin
+      HOME: /config
+      CLOUDCMD_ROOT: /mnt/fs
+      CLOUDCMD_TERMINAL: "false"
+      CLOUDCMD_CONSOLE: "true"
+      CLOUDCMD_OPEN: "false"
+      CLOUDCMD_NAME: Unraid Cloud Commander
+      CLOUDCMD_ONE_FILE_PANEL: "false"
+      CLOUDCMD_CONFIRM_COPY: "true"
+      CLOUDCMD_CONFIRM_MOVE: "true"
     ports:
-      - "8765:8000"
+      - "8765:8000"              # keep in sync with $cc_port of the cloudcmd.main plugin
     volumes:
       - /mnt/user/appdata/cloudcmd:/config
       - /mnt/user:/mnt/fs/user
@@ -17,3 +60,101 @@ services:
       - /mnt/remotes:/mnt/fs/remotes:ro,rslave
       - /mnt/user/appdata/cloudcmd/patch/index.html:/usr/src/cloudcmd/dist/index.html:ro
       - /mnt/user/appdata/cloudcmd/patch/user-keys.js:/usr/src/cloudcmd/dist/user-keys.js:ro
+    labels:
+      net.unraid.docker.managed: composeman
+      net.unraid.docker.shell: /bin/sh
+      net.unraid.docker.webui: http://[IP]:[PORT:8000]/
+      net.unraid.docker.icon: https://raw.githubusercontent.com/coderaiser/cloudcmd/master/img/logo/cloudcmd.png
+
+configs:
+  user-keys:
+    content: |
+      // Loaded by the patched dist/index.html (see README).
+      //  - Right arrow = enter the folder under the cursor, Left arrow = go to the parent folder.
+      //  - Inside the Unraid Main page iframe, F5/F6 start server-side copy/move jobs (rsync, persistent progress)
+      //    through the parent page instead of Cloud Commander's own in-tab copy.
+      (function () {
+          var LEFT = 37, RIGHT = 39, ENTER = 13, BACKSPACE = 8, F5 = 116, F6 = 117;
+          var inFrame = window.parent !== window;
+          var jobsReady = false;
+      
+          // Origin of the embedding page; null when unknown (the F5/F6 hand-off is then disabled instead of using '*').
+          function parentOrigin() {
+              try {
+                  if (location.ancestorOrigins && location.ancestorOrigins[0]) return location.ancestorOrigins[0];
+                  if (document.referrer) return new URL(document.referrer).origin;
+              } catch (e) { /* fall through */ }
+              return null;
+          }
+      
+          var pOrigin = inFrame ? parentOrigin() : null;
+          if (!pOrigin) inFrame = false;
+      
+          function fire(code, key) {
+              var target = document.activeElement || document.body;
+              var e = new KeyboardEvent('keydown', {key: key, keyCode: code, which: code, bubbles: true, cancelable: true});
+              target.dispatchEvent(e);
+          }
+      
+          function modalOpen() {
+              return !!document.querySelector('[class*="smalltalk"], [class*="modal"], [data-name="js-view"], [data-name="js-edit"], [data-name="js-config"]');
+          }
+      
+          function typing(t) {
+              return !!t && (/^(INPUT|TEXTAREA|SELECT)$$/.test(t.tagName) || t.isContentEditable);
+          }
+      
+          function startJob(op) {
+              var names = DOM.getFilenames(DOM.getActiveFiles()).filter(function (n) { return n !== '..'; });
+              if (!names.length) return;
+              window.parent.postMessage({
+                  type: 'cc-job', op: op, src: DOM.getCurrentDirPath(), dst: DOM.getNotCurrentDirPath(), names: names
+              }, pOrigin);
+              var sel = DOM.getSelectedFiles();
+              if (sel && sel.length) DOM.unselectFiles(sel);
+          }
+      
+          if (inFrame) {
+              window.addEventListener('message', function (e) {
+                  if (e.source !== window.parent || !e.data) return;
+                  if (e.data.type === 'cc-ready') {
+                      jobsReady = true;
+                  } else if (e.data.type === 'cc-refresh' && window.CloudCmd && CloudCmd.refresh) {
+                      try { CloudCmd.refresh(); } catch (err) { /* ignore */ }
+                  }
+              });
+              window.parent.postMessage({type: 'cc-hello'}, pOrigin);
+      
+              document.addEventListener('click', function (e) {
+                  var b = jobsReady && e.isTrusted && e.target.closest && e.target.closest('#f5, #f6');
+                  if (!b || typeof DOM === 'undefined' || modalOpen()) return;
+                  e.preventDefault();
+                  e.stopImmediatePropagation();
+                  startJob(b.id === 'f5' ? 'copy' : 'move');
+              }, true);
+          }
+      
+          window.addEventListener('keydown', function (e) {
+              if (!e.isTrusted) return;
+              if (e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
+              if (typing(e.target)) return;
+              if (typeof DOM === 'undefined' || !DOM.CurrentInfo || modalOpen()) return;
+      
+              if ((e.keyCode === F5 || e.keyCode === F6) && inFrame && jobsReady) {
+                  e.preventDefault();
+                  e.stopImmediatePropagation();
+                  startJob(e.keyCode === F5 ? 'copy' : 'move');
+                  return;
+              }
+              if (e.keyCode !== LEFT && e.keyCode !== RIGHT) return;
+      
+              var cur = DOM.CurrentInfo;
+              if (e.keyCode === RIGHT) {
+                  if (cur.isDir && cur.name !== '..') fire(ENTER, 'Enter');
+              } else if (cur.dirPath && cur.dirPath !== '/') {
+                  fire(BACKSPACE, 'Backspace');
+              }
+              e.preventDefault();
+              e.stopImmediatePropagation();
+          }, true);
+      }());

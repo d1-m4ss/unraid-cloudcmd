@@ -3,141 +3,93 @@
 [English version](README.md)
 
 Двухпанельный файловый менеджер ([Cloud Commander](https://github.com/coderaiser/cloudcmd), MIT) внутри интерфейса Unraid.
-Состоит из двух частей:
 
-1. **Контейнер** `cloudcmd` (compose-стек для плагина Compose Manager).
-2. **Плагин GUI** `cloudcmd.main`: секция «Cloud Commander» на вкладке **Main** перед Boot Device. По умолчанию свёрнута, чтобы случайно ничего не удалить. Копирование и перемещение (F5/F6) выполняются на сервере как фоновые задачи с прогрессом, отменой и возобновлением.
+- **Секция «Cloud Commander» на вкладке Main** перед Boot Device. По умолчанию свёрнута, чтобы случайно ничего не удалить.
+- **F5 / F6 (копировать / переместить) выполняются на сервере** как фоновые задачи: список с прогрессом на Main, отмена, возобновление, переживают закрытие вкладки.
+- Клавиши: Up/Down, **Right** войти в папку, **Left** подняться выше, Tab переключает панели, F3 просмотр, F4 правка, F7 новая папка, F8 удаление, F10 настройки.
 
-Проверено на Unraid 7.3.4. Нужны: Docker, плагин Compose Manager, rsync (входит в Unraid).
+Проверено на Unraid 7.3.4. Нужны плагин **Compose Manager** (Community Applications) и rsync (входит в Unraid).
 
-## Что получаешь
+## Быстрый старт
 
-- Секция на Main между пулами (ZFS Director) и Boot Device, кнопка **Open Cloud Commander** создаёт фрейм, **Collapse** уничтожает.
-- Клавиши: Up/Down, **Right** войти в папку, **Left** подняться выше, F3 просмотр, F4 правка, F7 новая папка, F8 удаление, F9 меню, F10 настройки.
-- **F5/F6 во фрейме** запускают задачи на сервере (rsync от `nobody:users`). Список задач виден на Main, переживает закрытие вкладки. Кнопки: Cancel, Resume, Remove, Clear finished. Задачи идут по очереди.
-- Если в назначении уже есть такие имена, страница спрашивает отдельно: перезаписать или слить.
+**1. Плагин** (Plugins → Install Plugin → вставить ссылку → Install):
 
-## Установка
-
-Дальше `P=/boot/config/plugins/compose.manager/projects/cloudcmd`, команды выполняются на Unraid (SSH) из каталога репозитория.
-
-### 1. Контейнер
-
-```bash
-P=/boot/config/plugins/compose.manager/projects/cloudcmd
-mkdir -p $P /mnt/user/appdata/cloudcmd/patch
-cp compose/docker-compose.yml compose/docker-compose.override.yml compose/description compose/icon_url \
-   compose/name compose/project_name compose/autostart compose/profiles compose/README.md $P/
-cp compose/.env.example $P/.env        # задайте TZ
-chown -R 99:100 /mnt/user/appdata/cloudcmd
+```
+https://raw.githubusercontent.com/d1-m4ss/unraid-cloudcmd/main/plugin/cloudcmd.main.plg
 ```
 
-Патч интерфейса (скрипт клавиш и тег в `index.html`; он монтируется в контейнер только для чтения):
+**2. Контейнер** (Docker → Compose → Add New Stack, имя `cloudcmd`, вставить файл целиком, Save, **Compose Up**):
 
-```bash
-A=/mnt/user/appdata/cloudcmd/patch
-docker run --rm --entrypoint cat coderaiser/cloudcmd:latest /usr/src/cloudcmd/dist/index.html > $A/index.html
-sed -i 's#<script src="{{ prefix }}/dist/cloudcmd.js"></script>#&<script src="{{ prefix }}/dist/user-keys.js?v=1"></script>#' $A/index.html
-cp compose/user-keys.js $A/user-keys.js
-chown 99:100 $A/*; chmod 644 $A/*
-```
+[`compose/docker-compose.yml`](compose/docker-compose.yml): один самодостаточный файл, больше ничего скачивать не нужно. Перед первым запуском можно поменять в нём `TZ` (часовой пояс), порт `8765` и монтируемые папки. Если меняете порт, поменяйте и `$cc_port` в плагине (см. «Настройки»).
 
-Запуск (или кнопка Compose Up в Docker → Compose):
+**3. Пароль.** Без пароля любой в вашей сети сможет писать в шары. Main → Cloud Commander → **Open in new tab**, нажмите **F10**, включите Auth, задайте логин и пароль, сохраните. Браузер не показывает окно логина внутри фрейма с другого порта, поэтому сначала войдите в этой новой вкладке: браузер обычно запоминает логин для порта, и фрейм на Main после этого открывается.
 
-```bash
-cd $P && docker compose -p cloudcmd --project-directory $P -f docker-compose.yml -f docker-compose.override.yml --env-file .env up -d
-```
-
-Порт хоста **8765** (внутри контейнера 8000), конфиг в `/mnt/user/appdata/cloudcmd`. Смонтированы `/mnt/user`, `/mnt/disks`, `/mnt/remotes` (только чтение). Отдельные диски `/mnt/diskN` и `/mnt/cache` не монтируются намеренно: не смешивать пользовательские шары и диски.
-
-### 2. Пароль
-
-Контейнер без пароля открывает запись в шары всей сети. Задайте логин и пароль: откройте `http://IP:8765/`, **F10** → включите Auth, укажите логин и пароль, сохраните. Пароль хранится хешем в `/mnt/user/appdata/cloudcmd/.cloudcmd.json`. Не задавайте `CLOUDCMD_AUTH` в `.env`: переменная перекрывает сохранённый конфиг.
-
-### 3. Плагин GUI
-
-```bash
-cp plugin/cloudcmd.main.plg /boot/config/plugins/cloudcmd.main.plg
-plugin install /boot/config/plugins/cloudcmd.main.plg
-```
-
-Если плагин той же версии уже стоит, `plugin install` ничего не делает: сначала `plugin remove cloudcmd.main.plg` (копию файла сохраните вне `/boot/config/plugins`), затем установка. Плагин ставится при каждой загрузке из `/boot/config/plugins`.
-
-Файл `.plg` собирается из `plugin/src/` скриптом `plugin/build.sh <версия>` (нужны bash и xmllint).
+Дальше откройте **Main** и нажмите **Open Cloud Commander**.
 
 ## Использование
 
-1. Откройте **Main**, секция Cloud Commander. **Первый раз** нажмите «Open in new tab» и войдите: браузер не показывает окно логина внутри фрейма с другого порта, после входа в новой вкладке браузер обычно запоминает логин для этого порта, и фрейм открывается.
-2. Нажмите **Open Cloud Commander**, кликните внутрь фрейма. Панели: Tab переключает, Right/Left ходят по папкам.
-3. Выделите файлы (Insert или пробел) и нажмите **F5** (копировать) или **F6** (переместить) в активной панели, цель: папка в другой панели. Подтвердите. Под плашкой появится строка задачи.
-4. Задачу можно отменить и позже возобновить: rsync докачивает с места остановки. Завершённые задачи удаляются кнопкой Remove или Clear finished.
+1. Нажмите **Open Cloud Commander** и кликните внутрь фрейма. Tab переключает панели, Right/Left ходят по папкам.
+2. Выделите файлы (Insert или пробел) и нажмите **F5** (копировать) или **F6** (переместить). Цель: папка во второй панели. Подтвердите. Под плашкой появится строка задачи.
+3. Задачу можно отменить и позже возобновить: rsync докачивает с места остановки. Завершённые задачи удаляются кнопкой Remove или Clear finished.
+4. Если в назначении уже есть такие имена, страница спросит отдельно, перезаписать или слить.
 5. Удаление (F8) и переименование выполняются сразу, корзины нет.
 
 Что важно знать:
 
-- Если открыть Cloud Commander отдельной вкладкой (`:8765`), F5/F6 работают штатно, но без сохранения прогресса: окно прогресса живёт только во вкладке.
+- В отдельной вкладке браузера (`http://IP:8765/`) F5/F6 работают штатно, без сохранения прогресса.
 - Если Unraid открыт по HTTPS (например через Tailscale), браузер не встроит HTTP-фрейм. Страница покажет подсказку, используйте «Open in new tab».
-- Перемещение копирует файлы по-настоящему (`--ignore-times`) и удаляет источник только после успешной передачи.
+- Перемещение копирует данные по-настоящему и удаляет источник только после успешной передачи.
 - Операции выполняются от `nobody:users` (99:100): файлы, недоступные этому пользователю, не скопируются.
+- Смонтированы `/mnt/user`, `/mnt/disks`, `/mnt/remotes` (только чтение). `/mnt/diskN` и `/mnt/cache` не монтируются намеренно: не смешивать пользовательские шары и диски.
+
+## Как работает файл контейнера
+
+`cloudcmd-init`: одноразовый помощник, который запускается при каждом Compose Up: готовит `/mnt/user/appdata/cloudcmd`, берёт `index.html` **текущего** образа, добавляет один тег `<script>` и кладёт его вместе со скриптом клавиш в `appdata/cloudcmd/patch/`. `cloudcmd` монтирует эти два файла только для чтения. Поэтому при обновлении образа (`Update Stack`) патч подстраивается автоматически. В списке он виден как остановленный контейнер, это нормально.
+
+## Настройки
+
+- **Порт:** `ports` в YAML и `$cc_port` в `plugin/src/CloudCommander.page`, затем `plugin/build.sh <новая версия>` и переустановка плагина.
+- **Часовой пояс:** `TZ` в YAML.
+- **Обновления плагина:** в плагине указан адрес обновлений, поэтому работает Plugins → Check for Updates.
 
 ## Где хранится состояние
 
 | Что | Где |
 | --- | --- |
-| Описание задач (переживает перезагрузку) | `/boot/config/plugins/cloudcmd.main/jobs/<id>.json` |
+| Описания задач (переживают перезагрузку) | `/boot/config/plugins/cloudcmd.main/jobs/<id>.json` |
 | Рабочее состояние, прогресс, лог rsync (RAM) | `/var/local/cloudcmd.main/jobs/<id>/` |
-| Конфиг и пароль Cloud Commander | `/mnt/user/appdata/cloudcmd/.cloudcmd.json` |
-| Патч интерфейса | `/mnt/user/appdata/cloudcmd/patch/` |
+| Конфиг Cloud Commander и хеш пароля | `/mnt/user/appdata/cloudcmd/.cloudcmd.json` |
+| Сгенерированный патч страницы | `/mnt/user/appdata/cloudcmd/patch/` |
 
-Состояние намеренно хранится вне `/mnt/user`: контейнер может писать в шары и не должен подменять файлы, с которыми работает код плагина от root. После перезагрузки Unraid запущенная копия прерывается, задача показывается как `interrupted` без процента, Resume докачивает.
-
-## Изменение настроек
-
-- **Порт:** `ports` в `docker-compose.yml` и `$cc_port` в `plugin/src/CloudCommander.page`, затем `plugin/build.sh <новая версия>` и переустановка плагина.
-- **Часовой пояс:** `TZ` в `.env`.
-- **Новая версия образа:** `docker compose ... pull && up -d`. Копию `patch/index.html` пересоздайте командами из шага 1, иначе будет использоваться старая страница.
-- **Изменили `user-keys.js`:** увеличьте число в `?v=` в `patch/index.html`, иначе браузер возьмёт старый скрипт из кэша.
-
-## Тесты
-
-`tests/jobs-smoke.sh` — смоук-тест серверной части задач. Запускать от root на Unraid с установленным плагином:
-
-```bash
-bash tests/jobs-smoke.sh            # SMOKE_BIG_MB=1200 по умолчанию
-```
-
-Создаёт временную папку в `/mnt/user/appdata`, проверяет валидацию, копирование, перемещение, перезапись, отмену и возобновление, kill -9 и имитацию перезагрузки, и удаляет всё созданное.
-
-## Удаление
-
-```bash
-plugin remove cloudcmd.main.plg
-cd $P && docker compose -p cloudcmd --project-directory $P -f docker-compose.yml -f docker-compose.override.yml down
-rm -rf $P /mnt/user/appdata/cloudcmd /boot/config/plugins/cloudcmd.main /var/local/cloudcmd.main
-```
+Состояние намеренно хранится вне `/mnt/user`: контейнер может писать в шары и не должен подменять файлы, с которыми работает код плагина от root. После перезагрузки Unraid запущенная копия прерывается, задача показывается как `interrupted`, Resume докачивает.
 
 ## Если не работает
 
-- **Фрейм пустой или белый:** выполните вход в новой вкладке (`http://IP:8765/`), проверьте `docker ps` и обновите страницу (Ctrl+F5).
-- **F5/F6 ничего не делают, копирование идёт «по-старому»:** браузер держит старый `user-keys.js`. Увеличьте `?v=` и перезапустите контейнер, затем Ctrl+F5.
-- **Задача висит в `interrupted`:** процесс остановили (перезапуск контейнера, перезагрузка, kill). Нажмите Resume. Лог: `/var/local/cloudcmd.main/jobs/<id>/w/rsync.err`.
-- **Задача в `failed`:** сообщение показано в строке задачи и в её подсказке (rsync, права, место на диске).
-- **Секция не появилась на Main:** `ls /usr/local/emhttp/plugins/cloudcmd.main`, права каталога должны быть `755`, затем `plugin install`.
+- **Фрейм пустой или белый:** войдите в новой вкладке (`http://IP:8765/`), проверьте, что стек запущен, обновите страницу (Ctrl+F5).
+- **F5/F6 работают «по-старому»:** браузер держит старый скрипт. Сделайте Compose Up ещё раз (в адресе скрипта есть версия) и Ctrl+F5.
+- **Задача висит в `interrupted`:** процесс остановили (перезапуск контейнера, перезагрузка). Нажмите Resume. Лог: `/var/local/cloudcmd.main/jobs/<id>/w/rsync.err`.
+- **Задача в `failed`:** сообщение показано в строке задачи и в её подсказке (ошибка rsync, права, место на диске).
+- **Секция не появилась на Main:** должен существовать каталог `/usr/local/emhttp/plugins/cloudcmd.main` с правами `755`; переустановите плагин.
 
-## Состав репозитория
+## Удаление
+
+В Compose нажмите Compose Down и удалите стек, затем `plugin remove cloudcmd.main.plg`. Чтобы убрать все данные, удалите `/mnt/user/appdata/cloudcmd`, `/boot/config/plugins/cloudcmd.main` и `/var/local/cloudcmd.main`.
+
+## Разработка
 
 ```
-compose/    docker-compose.yml, override с метками и иконкой, метаданные Compose Manager,
-            user-keys.js (стрелки, F5/F6), .env.example
-tests/      jobs-smoke.sh
-plugin/     cloudcmd.main.plg (собранный), build.sh, CHANGES.txt
-plugin/src/ CloudCommander.page (секция на Main), jobs.php (API задач), job-run.sh (раннер rsync)
+compose/      docker-compose.template.yml + user-keys.js  ->  build-compose.sh  ->  docker-compose.yml
+plugin/       cloudcmd.main.plg (собирается build.sh из plugin/src/), CHANGES.txt
+plugin/src/   CloudCommander.page (секция на Main), jobs.php (API задач), job-run.sh (раннер rsync)
+tests/        jobs-smoke.sh
 ```
+
+После правки `user-keys.js` или шаблона запустите `compose/build-compose.sh`; после правки `plugin/src/*` запустите `plugin/build.sh <версия>` (нужны bash и xmllint). Смоук-тест серверной части: от root на Unraid с установленным плагином, `bash tests/jobs-smoke.sh` (`SMOKE_BIG_MB=1200` по умолчанию); он работает во временной папке и удаляет всё созданное.
 
 ## Безопасность
 
-- Логин и пароль обязательны. Контейнер открывает на запись `/mnt/user`, а консоль Cloud Commander включена.
-- `jobs.php` работает от root в webGUI и запускается только по сессии Unraid с CSRF-токеном. Пути проверяются по списку корней, имена с управляющими символами отклоняются, rsync получает `--` и абсолютные пути, раннер запускается с правами `nobody:users` без привилегий.
+- Логин и пароль обязательны. Контейнер имеет запись в `/mnt/user`, консоль Cloud Commander включена.
+- `jobs.php` работает от root в webGUI и отвечает только на запросы с сессией Unraid и CSRF-токеном. Пути проверяются по списку корней, имена с управляющими символами отклоняются, rsync получает `--` и абсолютные пути, раннер запускается как `nobody:users` без привилегий.
 - Страница принимает сообщения только от своего фрейма (проверка источника и origin).
 
 ## Лицензия
