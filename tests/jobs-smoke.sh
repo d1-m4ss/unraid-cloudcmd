@@ -72,6 +72,11 @@ else
 fi
 check "missing item is rejected" err_is "$(api "{\"action\":\"start\",\"op\":\"copy\",\"src\":\"$C/src\",\"dst\":\"$C/dst\",\"names\":[\"nope\"]}")" "not found"
 
+echo "== address setting (rejections only, nothing is written)"
+check "javascript: address is rejected" err_is "$(api '{"action":"setcfg","url":"javascript:alert(1)"}')" "address must look like"
+check "trailing newline in the address is rejected" err_is "$(api '{"action":"setcfg","url":"http://host.example/x\n"}')" "address must look like"
+check "over-long address is rejected" err_is "$(api "{\"action\":\"setcfg\",\"url\":\"http://$(printf 'a%.0s' $(seq 1 320)).example/\"}")" "bad address"
+
 echo "== copy"
 id=$(start copy "$C/src" "$C/dst" '["dirA","file1.txt"]')
 check "copy job starts" test -n "$id"

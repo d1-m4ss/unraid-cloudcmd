@@ -1,3 +1,6 @@
+###2026.11.01.8
+- Address validation: a trailing newline is no longer accepted (end-of-string anchor).
+
 ###2026.11.01.7
 - Configurable Cloud Commander address (button "Address...") for setups behind a reverse proxy.
 - "Open in window": Cloud Commander in its own window, used automatically when the page is https and the address is http. F5/F6 jobs work there too.

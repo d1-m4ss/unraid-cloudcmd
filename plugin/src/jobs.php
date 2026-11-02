@@ -169,7 +169,7 @@ if ($action === 'setcfg') {
         @unlink(CFG);
         out(['ok' => true]);
     }
-    if (!preg_match('#^https?://[^\s<>"\'\\\\]+$#', $u) || !parse_url($u, PHP_URL_HOST)) fail('the address must look like http://host:port/ or https://host/path/');
+    if (!preg_match('#^https?://[^\s<>"\'\\\\]+\z#', $u) || !parse_url($u, PHP_URL_HOST)) fail('the address must look like http://host:port/ or https://host/path/');
     if (file_put_contents(CFG, json_encode(['url' => $u], JSON_UNESCAPED_SLASHES)) === false) fail('cannot save the address', 500);
     out(['ok' => true]);
 }

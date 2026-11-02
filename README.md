@@ -90,7 +90,7 @@ After editing `user-keys.js` or the template run `compose/build-compose.sh`; aft
 
 - A login and password are required. The container has write access to `/mnt/user` and the Cloud Commander console is enabled.
 - `jobs.php` runs as root inside the webGUI and only answers requests with an Unraid session and a CSRF token. Paths are checked against a list of roots, names with control characters are rejected, rsync gets `--` and absolute paths, the runner starts as `nobody:users` with no privileges.
-- The page accepts messages only from its own frame (source and origin are checked).
+- The page accepts messages only from the frame or the pop-up window it opened itself (window identity and origin are both checked). The address of Cloud Commander is validated as an http(s) URL on write and again on read.
 
 ## License
 

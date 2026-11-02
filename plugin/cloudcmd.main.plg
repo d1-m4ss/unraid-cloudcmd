@@ -2,7 +2,7 @@
 <!DOCTYPE PLUGIN [
 <!ENTITY name "cloudcmd.main">
 <!ENTITY author "d1-m4ss">
-<!ENTITY version "2026.11.01.7">
+<!ENTITY version "2026.11.01.8">
 <!ENTITY launch "Main">
 <!ENTITY gitURL "https://raw.githubusercontent.com/d1-m4ss/unraid-cloudcmd/main">
 <!ENTITY pluginURL "&gitURL;/plugin/cloudcmd.main.plg">
@@ -10,6 +10,9 @@
 <PLUGIN name="&name;" author="&author;" version="&version;" launch="&launch;" pluginURL="&pluginURL;" min="6.12.0" icon="columns">
 
 <CHANGES>
+###2026.11.01.8
+- Address validation: a trailing newline is no longer accepted (end-of-string anchor).
+
 ###2026.11.01.7
 - Configurable Cloud Commander address (button "Address...") for setups behind a reverse proxy.
 - "Open in window": Cloud Commander in its own window, used automatically when the page is https and the address is http. F5/F6 jobs work there too.
@@ -48,7 +51,7 @@ Markdown="false"
 $cc_port = 8765;
 $cc_csrf = $var['csrf_token'] ?? (@parse_ini_file('/var/local/emhttp/var.ini')['csrf_token'] ?? '');
 $cc_cfg = @json_decode(@file_get_contents('/boot/config/plugins/cloudcmd.main/cloudcmd.cfg'), true);
-$cc_url = (is_array($cc_cfg) && is_string($cc_cfg['url'] ?? null) && preg_match('#^https?://[^\s<>"\'\\\\]+$#', $cc_cfg['url'])) ? $cc_cfg['url'] : '';
+$cc_url = (is_array($cc_cfg) && is_string($cc_cfg['url'] ?? null) && preg_match('#^https?://[^\s<>"\'\\\\]+\z#', $cc_cfg['url'])) ? $cc_cfg['url'] : '';
 ?>
 <style>
   #cc-box { margin: 0 0 1.2em 0; }
@@ -483,7 +486,7 @@ if ($action === 'setcfg') {
         @unlink(CFG);
         out(['ok' => true]);
     }
-    if (!preg_match('#^https?://[^\s<>"\'\\\\]+$#', $u) || !parse_url($u, PHP_URL_HOST)) fail('the address must look like http://host:port/ or https://host/path/');
+    if (!preg_match('#^https?://[^\s<>"\'\\\\]+\z#', $u) || !parse_url($u, PHP_URL_HOST)) fail('the address must look like http://host:port/ or https://host/path/');
     if (file_put_contents(CFG, json_encode(['url' => $u], JSON_UNESCAPED_SLASHES)) === false) fail('cannot save the address', 500);
     out(['ok' => true]);
 }

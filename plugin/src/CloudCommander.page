@@ -7,7 +7,7 @@ Markdown="false"
 $cc_port = 8765;
 $cc_csrf = $var['csrf_token'] ?? (@parse_ini_file('/var/local/emhttp/var.ini')['csrf_token'] ?? '');
 $cc_cfg = @json_decode(@file_get_contents('/boot/config/plugins/cloudcmd.main/cloudcmd.cfg'), true);
-$cc_url = (is_array($cc_cfg) && is_string($cc_cfg['url'] ?? null) && preg_match('#^https?://[^\s<>"\'\\\\]+$#', $cc_cfg['url'])) ? $cc_cfg['url'] : '';
+$cc_url = (is_array($cc_cfg) && is_string($cc_cfg['url'] ?? null) && preg_match('#^https?://[^\s<>"\'\\\\]+\z#', $cc_cfg['url'])) ? $cc_cfg['url'] : '';
 ?>
 <style>
   #cc-box { margin: 0 0 1.2em 0; }
