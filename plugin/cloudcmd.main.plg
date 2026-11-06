@@ -2,7 +2,7 @@
 <!DOCTYPE PLUGIN [
 <!ENTITY name "cloudcmd.main">
 <!ENTITY author "d1-m4ss">
-<!ENTITY version "2026.11.01.8">
+<!ENTITY version "2026.11.06">
 <!ENTITY launch "Main">
 <!ENTITY gitURL "https://raw.githubusercontent.com/d1-m4ss/unraid-cloudcmd/main">
 <!ENTITY pluginURL "&gitURL;/plugin/cloudcmd.main.plg">
@@ -10,6 +10,10 @@
 <PLUGIN name="&name;" author="&author;" version="&version;" launch="&launch;" pluginURL="&pluginURL;" min="6.12.0" icon="columns">
 
 <CHANGES>
+###2026.11.06
+- Fix: updating the plugin (Check for Updates) now really replaces the installed files; before, Unraid kept the old ones because the files had no checksum.
+- Move: when everything was copied but some source files could not be removed (owned by another user, e.g. root), the job says so with the exact fix, and Resume after the fix only removes the sources instead of copying again.
+
 ###2026.11.01.8
 - Address validation: a trailing newline is no longer accepted (end-of-string anchor).
 
@@ -311,6 +315,7 @@ $cc_url = (is_array($cc_cfg) && is_string($cc_cfg['url'] ?? null) && preg_match(
 </script>
 ]]>
 </INLINE>
+<SHA256>949748e3fd035ab931c43f4ec5bcd0dc64a7a22206b64253e8e28a1d8a6bfdcb</SHA256>
 </FILE>
 
 <FILE Name="/usr/local/emhttp/plugins/&name;/jobs.php" Mode="0644">
@@ -525,6 +530,7 @@ if ($action === 'dismiss') {
 fail('unknown action');
 ]]>
 </INLINE>
+<SHA256>6a1abaec0a4d7a756eb0544d77671ece0a15b862ed1fa0740a3169c756d05771</SHA256>
 </FILE>
 
 <FILE Name="/usr/local/emhttp/plugins/&name;/job-run.sh" Mode="0755">
@@ -570,7 +576,12 @@ if [ ${#srcs[@]} -eq 0 ]; then write "done" 100 0 "" "" "nothing left to transfe
 write running "$START_PCT" 0
 args=(-aH --partial --no-inc-recursive --info=progress2 --no-human-readable -s)
 # Move: never trust the size+mtime quick-check, a source is only removed after it was really transferred.
-[ "$op" = move ] && args+=(--remove-source-files --ignore-times)
+# Exception: "copied" is written below when a previous run transferred everything and only the removal of
+# source files was refused; then the retry may skip what is already in place and just remove the sources.
+if [ "$op" = move ]; then
+    args+=(--remove-source-files)
+    [ -e copied ] || args+=(--ignore-times)
+fi
 
 last=0
 rsync "${args[@]}" -- "${srcs[@]}" "$dst/" 2> rsync.err | while IFS= read -r -d $'\r' line || [ -n "$line" ]; do
@@ -592,14 +603,24 @@ if [ "$rc" -eq 0 ]; then
             if [ -d "$s" ] && [ ! -L "$s" ]; then find "$s" -depth -type d -empty -delete; fi
         done
     fi
+    rm -f copied
     write "done" 100 0 "" "" ""
 elif [ -e ../cancel ]; then
     write cancelled "$pct" 0 "" "" "cancelled"
 else
+    nrem=$(grep -c 'sender failed to remove' rsync.err)
+    nother=$(grep -v -e 'sender failed to remove' -e '^rsync error: some files/attrs were not transferred' -e '^$' rsync.err | wc -l)
+    if [ "$op" = move ] && [ "$rc" -eq 23 ] && [ "$nrem" -gt 0 ] && [ "$nother" -eq 0 ]; then
+        # Everything was copied; only deleting some sources was refused (files/folders owned by another user, e.g. root).
+        : > copied
+        write failed 100 0 "" "" "copied, but $nrem source file(s) could not be removed: no permission (owned by another user, e.g. root). On the server run: chown -R nobody:users '$src' and press Resume (the copy is not repeated)."
+        exit 0
+    fi
     write failed "$pct" 0 "" "" "rsync exit $rc: $(tail -n 3 rsync.err | tr '\n' ' ')"
 fi
 ]]>
 </INLINE>
+<SHA256>d41971ec178e212c102c7d0b64a5803433670932c1d83a96b0eddf6df3e2a1c5</SHA256>
 </FILE>
 
 <FILE Run="/bin/bash">

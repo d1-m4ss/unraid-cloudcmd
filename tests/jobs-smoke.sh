@@ -42,6 +42,7 @@ start() { # op src dst names-json [overwrite] -> job id (and registers it for cl
     echo "$id"
 }
 state() { api '{"action":"list"}' | jq -r ".jobs[]|select(.id==\"$1\")|.state"; }
+jobmsg() { api '{"action":"list"}' | jq -r ".jobs[]|select(.id==\"$1\")|.msg"; }
 pct() { api '{"action":"list"}' | jq -r ".jobs[]|select(.id==\"$1\")|.pct"; }
 wait_state() { # id regex seconds
     local i
@@ -50,7 +51,7 @@ wait_state() { # id regex seconds
 }
 err_is() { echo "$1" | jq -e --arg e "$2" '.ok == false and (.error | contains($e))' >/dev/null; }
 
-mkdir -p "$H"/{src,dst,dst2,dst3}
+mkdir -p "$H"/{src,dst,dst2,dst3,dst4}
 mkdir -p "$H/src/dirA/sub"
 echo hello > "$H/src/dirA/sub/f.txt"; echo one > "$H/src/file1.txt"
 printf 'AAAA' > "$H/src/same"; printf 'BBBB' > "$H/dst3/same"
@@ -97,6 +98,20 @@ id=$(start move "$C/src" "$C/dst3" '["same"]' overwrite)
 check "move with overwrite finishes" wait_state "$id" '^done$' 30
 check "same size+mtime but different content is really replaced" test "$(cat "$H/dst3/same")" = AAAA
 check "move removed the source" test ! -e "$H/src/same"
+
+echo "== move of items this user cannot remove (owned by root)"
+mkdir -p "$H/src/rootdir/sub"; echo r > "$H/src/rootdir/sub/f"; chown -R 0:0 "$H/src/rootdir"
+id=$(start move "$C/src" "$C/dst4" '["rootdir"]')
+check "job ends as failed" wait_state "$id" '^failed$' 30
+msg_has() { [[ "$(jobmsg "$1")" == "$2"* ]]; }
+check "message explains: copied, source not removable" msg_has "$id" "copied, but 1 source file(s) could not be removed"
+check "the data was copied" test "$(cat "$H/dst4/rootdir/sub/f" 2>/dev/null)" = r
+check "the source is still there" test -f "$H/src/rootdir/sub/f"
+chown -R 99:100 "$H/src/rootdir"
+api "{\"action\":\"resume\",\"id\":\"$id\"}" >/dev/null
+check "after chown, resume finishes" wait_state "$id" '^done$' 30
+check "source is removed after resume" test ! -e "$H/src/rootdir"
+check "destination is still complete" test "$(cat "$H/dst4/rootdir/sub/f")" = r
 
 echo "== cancel and resume"
 id=$(start copy "$C/src" "$C/dst2" '["big.bin"]')

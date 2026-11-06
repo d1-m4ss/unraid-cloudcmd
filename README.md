@@ -69,6 +69,7 @@ State is intentionally kept outside `/mnt/user`: the container can write to the 
 - **F5/F6 do nothing special, copy works the old way:** the browser holds an old script. Compose Up again (the script address carries a version) and hard-refresh.
 - **A job sits in `interrupted`:** the process was stopped (container restart, reboot). Press Resume. Log: `/var/local/cloudcmd.main/jobs/<id>/w/rsync.err`.
 - **A job is `failed`:** the message is shown in the job row and its tooltip (rsync error, permissions, disk space).
+- **A move is `failed` with "copied, but N source file(s) could not be removed":** everything was copied, but the source has files or folders owned by another user (for example root, created by Jellyfin/Plex), which the job user `nobody` may not delete. On the server run the `chown -R nobody:users '<source>'` shown in the message, then press Resume: it only removes the sources, the copy is not repeated. The plugin deliberately does not do this chown itself as root, because the container can write to the shares.
 - **The section is missing on Main:** `ls -ld /usr/local/emhttp/plugins/cloudcmd.main` must exist and be mode `755`; reinstall the plugin.
 
 ## Uninstall

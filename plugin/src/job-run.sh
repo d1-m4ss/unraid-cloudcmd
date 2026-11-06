@@ -39,7 +39,12 @@ if [ ${#srcs[@]} -eq 0 ]; then write "done" 100 0 "" "" "nothing left to transfe
 write running "$START_PCT" 0
 args=(-aH --partial --no-inc-recursive --info=progress2 --no-human-readable -s)
 # Move: never trust the size+mtime quick-check, a source is only removed after it was really transferred.
-[ "$op" = move ] && args+=(--remove-source-files --ignore-times)
+# Exception: "copied" is written below when a previous run transferred everything and only the removal of
+# source files was refused; then the retry may skip what is already in place and just remove the sources.
+if [ "$op" = move ]; then
+    args+=(--remove-source-files)
+    [ -e copied ] || args+=(--ignore-times)
+fi
 
 last=0
 rsync "${args[@]}" -- "${srcs[@]}" "$dst/" 2> rsync.err | while IFS= read -r -d $'\r' line || [ -n "$line" ]; do
@@ -61,9 +66,18 @@ if [ "$rc" -eq 0 ]; then
             if [ -d "$s" ] && [ ! -L "$s" ]; then find "$s" -depth -type d -empty -delete; fi
         done
     fi
+    rm -f copied
     write "done" 100 0 "" "" ""
 elif [ -e ../cancel ]; then
     write cancelled "$pct" 0 "" "" "cancelled"
 else
+    nrem=$(grep -c 'sender failed to remove' rsync.err)
+    nother=$(grep -v -e 'sender failed to remove' -e '^rsync error: some files/attrs were not transferred' -e '^$' rsync.err | wc -l)
+    if [ "$op" = move ] && [ "$rc" -eq 23 ] && [ "$nrem" -gt 0 ] && [ "$nother" -eq 0 ]; then
+        # Everything was copied; only deleting some sources was refused (files/folders owned by another user, e.g. root).
+        : > copied
+        write failed 100 0 "" "" "copied, but $nrem source file(s) could not be removed: no permission (owned by another user, e.g. root). On the server run: chown -R nobody:users '$src' and press Resume (the copy is not repeated)."
+        exit 0
+    fi
     write failed "$pct" 0 "" "" "rsync exit $rc: $(tail -n 3 rsync.err | tr '\n' ' ')"
 fi

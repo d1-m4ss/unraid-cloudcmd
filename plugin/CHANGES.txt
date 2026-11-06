@@ -1,3 +1,7 @@
+###2026.11.06
+- Fix: updating the plugin (Check for Updates) now really replaces the installed files; before, Unraid kept the old ones because the files had no checksum.
+- Move: when everything was copied but some source files could not be removed (owned by another user, e.g. root), the job says so with the exact fix, and Resume after the fix only removes the sources instead of copying again.
+
 ###2026.11.01.8
 - Address validation: a trailing newline is no longer accepted (end-of-string anchor).
 

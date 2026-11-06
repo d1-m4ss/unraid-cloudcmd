@@ -26,7 +26,8 @@ HDR
 emit() { # path mode
     printf '\n<FILE Name="/usr/local/emhttp/plugins/&name;/%s" Mode="%s">\n<INLINE>\n<![CDATA[' "$1" "$2"
     cat "src/$1"
-    printf ']]>\n</INLINE>\n</FILE>\n'
+    # Unraid never overwrites an existing file unless a hash is given and differs: without it updates change nothing.
+    printf ']]>\n</INLINE>\n<SHA256>%s</SHA256>\n</FILE>\n' "$(printf '%s\n' "$(cat "src/$1")" | shasum -a 256 | cut -d' ' -f1)"
 }
 emit CloudCommander.page 0644
 emit jobs.php 0644
